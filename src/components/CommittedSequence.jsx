@@ -8,7 +8,12 @@ import { tileGlyph, tileStyle } from '../tileHelpers';
 // so far this turn, along with a live damage/block preview and
 // a breakdown of each combo segment.
 // ============================================================
-export default function CommittedSequence({ committed, preview }) {
+export default function CommittedSequence({
+  committed,
+  preview,
+  selectedCommittedIndex,
+  onSelectCommittedTile,
+}) {
   return (
     <section style={styles.committedArea}>
       {/* Header row: label + live dmg / block totals */}
@@ -25,20 +30,26 @@ export default function CommittedSequence({ committed, preview }) {
       <div style={styles.committedRow}>
         {Array.from({ length: TUNING.draft.maxSequence }).map((_, i) => {
           const tile = committed[i];
+          const isSelected = tile && selectedCommittedIndex === i;
           return (
-            <div
+            <button
               key={i}
+              type="button"
+              onClick={() => tile && onSelectCommittedTile(i)}
+              disabled={!tile}
               style={{
                 ...styles.committedSlot,
                 ...(tile ? tileStyle(tile) : styles.committedEmpty),
+                ...(isSelected ? styles.committedSelected : {}),
               }}
+              className="committed-slot-btn"
             >
               {tile ? (
                 tileGlyph(tile)
               ) : (
                 <span style={styles.slotNum}>{i + 1}</span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>

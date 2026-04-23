@@ -8,7 +8,7 @@ import { rollRow, computeResolution, abilityDescription, isValidSequence } from 
 //
 // Return value:
 //   state   – all reactive values the UI reads
-//   actions – { pickTile, reroll, discardLast, nextEnemy, restart }
+//   actions – { pickTile, selectCommittedTile, reroll, discardSelected, nextEnemy, restart }
 // ============================================================
 export default function useCombat() {
   // --- Core player / enemy state ---
@@ -22,6 +22,7 @@ export default function useCombat() {
   const [turn, setTurn] = useState(1);
   const [round, setRound] = useState(1);
   const [committed, setCommitted] = useState([]);
+  const [selectedCommittedIndex, setSelectedCommittedIndex] = useState(null);
   const [currentRow, setCurrentRow] = useState([]);
   const [rerolledThisRound, setRerolledThisRound] = useState(false);
 
@@ -90,6 +91,7 @@ export default function useCombat() {
     setIncomingDamage(dmg);
     setEnemyTelegraph(msg);
     setCommitted([]);
+    setSelectedCommittedIndex(null);
     setRound(1);
     setRerolledThisRound(false);
     setCurrentRow(rollRow(getRowWeights(1), TUNING.draft.rowSize));
@@ -124,6 +126,8 @@ export default function useCombat() {
     const tile = currentRow[idx];
     const newCommitted = [...committed, tile];
     setCommitted(newCommitted);
+    // New picks become the currently selected committed tile.
+    setSelectedCommittedIndex(newCommitted.length - 1);
 
     // Always roll a new row for the next pick (unless at cap)
     if (newCommitted.length < TUNING.draft.maxSequence) {
@@ -161,16 +165,36 @@ export default function useCombat() {
     setRerolledThisRound(true);
   };
 
-  /** Spend mana to undo the last committed tile */
-  const discardLast = () => {
+  /** Select a committed tile index to discard. Clicking again clears selection. */
+  const selectCommittedTile = (index) => {
+    if (phase !== 'drafting') return;
+    if (index < 0 || index >= committed.length) return;
+    setSelectedCommittedIndex((prev) => (prev === index ? null : index));
+  };
+
+  /** Spend mana to discard the selected committed tile. This does not modify the draft row. */
+  const discardSelected = () => {
     if (committed.length === 0) return;
+    const discardIndex =
+      selectedCommittedIndex !== null && selectedCommittedIndex >= 0 && selectedCommittedIndex < committed.length
+        ? selectedCommittedIndex
+        : committed.length - 1;
+
     const cost = getDiscardCost();
     if (playerMana < cost) return;
+
     setPlayerMana((m) => m - cost);
-    setCommitted((c) => c.slice(0, -1));
-    setRound((r) => r - 1);
-    setRerolledThisRound(false);
-    setCurrentRow(rollRow(getRowWeights(round - 1), TUNING.draft.rowSize));
+
+    // Remove one committed tile and let the rest shift left naturally.
+    setCommitted((c) => {
+      const next = [...c];
+      next.splice(discardIndex, 1);
+      return next;
+    });
+
+    // Keep round in sync with pick count, but never below 1.
+    setRound((r) => Math.max(1, r - 1));
+    setSelectedCommittedIndex(null);
   };
 
   // ----------------------------------------------------------
@@ -276,6 +300,7 @@ export default function useCombat() {
     setPlayerShield(0);
     setTurn(1);
     setLog([]);
+    setSelectedCommittedIndex(null);
     startTurn(1);
   };
 
@@ -301,6 +326,7 @@ export default function useCombat() {
       turn,
       round,
       committed,
+      selectedCommittedIndex,
       currentRow,
       rerolledThisRound,
       rerollLocked,
@@ -316,8 +342,9 @@ export default function useCombat() {
     },
     actions: {
       pickTile,
+      selectCommittedTile,
       reroll,
-      discardLast,
+      discardSelected,
       submitSequence,
       nextEnemy,
       restart,

@@ -31,6 +31,19 @@ export const globalCss = `
     color: #e8c98c !important;
   }
 
+  /* Committed slots are interactive when they contain a tile */
+  .committed-slot-btn {
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  }
+  .committed-slot-btn:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.45);
+  }
+  .committed-slot-btn:disabled {
+    cursor: default;
+  }
+
   /* Victory / defeat overlay buttons */
   .overlay-btn {
     cursor: pointer;
@@ -317,14 +330,20 @@ export const styles = {
     marginBottom: 10,
   },
   committedSlot: {
-    aspectRatio: '3 / 2',
     border: '2px solid',
+    aspectRatio: '3 / 2',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: 28,
     fontFamily: '"Cinzel", serif',
     borderRadius: 2,
+    padding: 0,
+    margin: 0,
+  },
+  committedSelected: {
+    boxShadow: '0 0 0 2px rgba(232, 201, 140, 0.85), 0 0 14px rgba(212, 162, 76, 0.4)',
+    borderColor: '#e8c98c',
   },
   committedEmpty: {
     background: '#0d0a08',

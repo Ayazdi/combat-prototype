@@ -23,18 +23,22 @@ export default function DraftArea({
   playerMana,
   discardCost,
   committedLength,
+  selectedCommittedIndex,
   sequenceValid,
   sequenceFull,
   onPickTile,
   onReroll,
-  onDiscardLast,
+  onDiscardSelected,
   onSubmit,
 }) {
   const rerollDisabled =
     phase !== 'drafting' || rerollLocked || rerolledThisRound || playerMana < TUNING.draft.rerollCost;
 
   const discardDisabled =
-    phase !== 'drafting' || committedLength === 0 || playerMana < discardCost;
+    phase !== 'drafting' ||
+    committedLength === 0 ||
+    selectedCommittedIndex === null ||
+    playerMana < discardCost;
 
   // Can't pick more tiles once we hit the max
   const pickDisabled = phase !== 'drafting' || sequenceFull;
@@ -93,7 +97,7 @@ export default function DraftArea({
         </button>
 
         <button
-          onClick={onDiscardLast}
+          onClick={onDiscardSelected}
           disabled={discardDisabled}
           style={{
             ...styles.controlBtn,
@@ -102,7 +106,7 @@ export default function DraftArea({
           className="ctrl-btn"
         >
           <span style={styles.ctrlIcon}>✕</span>
-          <span>DISCARD LAST</span>
+          <span>DISCARD SELECTED</span>
           <span style={styles.ctrlCost}>{discardCost} MP</span>
         </button>
 

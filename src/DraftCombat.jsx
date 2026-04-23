@@ -51,11 +51,12 @@ export default function DraftCombat() {
           playerMana={state.playerMana}
           discardCost={state.discardCost}
           committedLength={state.committed.length}
+                selectedCommittedIndex={state.selectedCommittedIndex}
           sequenceValid={state.sequenceValid}
           sequenceFull={state.sequenceFull}
           onPickTile={actions.pickTile}
           onReroll={actions.reroll}
-          onDiscardLast={actions.discardLast}
+          onDiscardSelected={actions.discardSelected}
           onSubmit={actions.submitSequence}
         />
 
@@ -63,6 +64,8 @@ export default function DraftCombat() {
         <CommittedSequence
           committed={state.committed}
           preview={state.preview}
+          selectedCommittedIndex={state.selectedCommittedIndex}
+          onSelectCommittedTile={actions.selectCommittedTile}
         />
 
         {/* Scrollable battle log */}
