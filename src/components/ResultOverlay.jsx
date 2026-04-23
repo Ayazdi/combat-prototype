@@ -26,6 +26,12 @@ export default function ResultOverlay({ phase, enemy, enemyIdx, onRestart, onNex
           {isVictory ? `${enemy.name} has fallen` : `${enemy.name} has bested you`}
         </div>
 
+        {isVictory && (
+          <div style={styles.overlayReward}>
+            Gain from victory: +{TUNING.player.manaRegenPerFoe} Mana
+          </div>
+        )}
+
         {/* Action buttons */}
         <div style={styles.overlayButtons}>
           <button onClick={onRestart} style={styles.overlayBtn} className="overlay-btn">

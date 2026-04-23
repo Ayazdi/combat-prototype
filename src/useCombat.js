@@ -284,8 +284,7 @@ export default function useCombat() {
       const next = enemyIdx + 1;
       setEnemyIdx(next);
       setEnemyHp(TUNING.enemies[next].hp);
-      setPlayerHp(TUNING.player.maxHp);
-      setPlayerMana(TUNING.player.startingMana);
+      // Carry current HP/MP to the next fight; no recovery between foes.
       setPlayerShield(0);
       setTurn(1);
       setLog([]);

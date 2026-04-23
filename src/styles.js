@@ -437,8 +437,15 @@ export const styles = {
     fontSize: 12,
     color: '#8a8070',
     letterSpacing: '0.15em',
-    marginBottom: 28,
+    marginBottom: 12,
     textTransform: 'uppercase',
+  },
+  overlayReward: {
+    fontSize: 12,
+    color: '#8ad88a',
+    letterSpacing: '0.08em',
+    marginBottom: 28,
+    fontWeight: 600,
   },
   overlayButtons: { display: 'flex', gap: 10, justifyContent: 'center' },
   overlayBtn: {
