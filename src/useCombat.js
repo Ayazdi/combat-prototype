@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
-import { rollRow, computeResolution, abilityDescription, isValidSequence } from './gameHelpers';
+import { rollRow, computeResolution, abilityDescription, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -146,9 +146,14 @@ export default function useCombat() {
     if (phase !== 'drafting') return;
     if (committed.length === 0) return;
 
-    if (isValidSequence(committed)) {
-      // Valid combo — resolve normally
-      resolveTurn(committed);
+    const bestCombo = findBestAcceptedSequence(committed);
+
+    if (bestCombo) {
+      if (bestCombo.sequence !== committed.join('')) {
+        addLog(`T${turn}: best combo found in hand -> ${bestCombo.sequence}`);
+      }
+      // Resolve using the strongest accepted combo found in the submitted hand.
+      resolveTurn(bestCombo.tiles);
     } else {
       // Invalid sequence — log the failure and punish the player
       addLog(`T${turn}: INVALID sequence [${committed.join('')}] — no damage, no block`);
@@ -306,7 +311,8 @@ export default function useCombat() {
   // ----------------------------------------------------------
   // Derived / computed values the UI needs
   // ----------------------------------------------------------
-  const preview = computeResolution(committed);
+  const bestCombo = findBestAcceptedSequence(committed);
+  const preview = computeResolution(bestCombo ? bestCombo.tiles : []);
   const discardCost = getDiscardCost();
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = committed.length >= TUNING.draft.maxSequence;

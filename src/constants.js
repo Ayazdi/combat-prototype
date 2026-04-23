@@ -22,9 +22,13 @@ export const TUNING = {
     rerollCost: 15,
     discardCost: 25,
   },
-  // Only these exact committed sequences are valid.
-  // The player must submit one of these or the turn fails.
-  acceptedSequences: ['AA', 'AAA', 'AAAA', 'AAAAA', 'DD', 'DDD', 'DDDD', 'DDDDD'],
+  // Accepted combos. Submit can contain extra tiles/empties; the best
+  // available combo from this list is what gets resolved.
+  acceptedSequences: [
+    'AA', 'AAA', 'AAAA', 'AAAAA',
+    'DD', 'DDD', 'DDDD', 'DDDDD',
+    'AADD', 'AAADD', 'DDDAA',
+  ],
   weights: {
     A: 20,
     D: 20,

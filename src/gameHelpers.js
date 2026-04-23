@@ -51,10 +51,45 @@ export const computeResolution = (committed) => {
   return { damage, block, segments };
 };
 
-/** Check whether a committed sequence is one of the accepted combos */
+/**
+ * Find the strongest accepted combo that exists in the submitted hand.
+ * "Strongest" is based on current tuning using score = damage + block.
+ */
+export const findBestAcceptedSequence = (committed) => {
+  const submitted = committed.join('');
+  if (!submitted) return null;
+
+  let best = null;
+  for (const combo of TUNING.acceptedSequences) {
+    if (!submitted.includes(combo)) continue;
+
+    const tiles = combo.split('');
+    const resolution = computeResolution(tiles);
+    const score = resolution.damage + resolution.block;
+
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && resolution.damage > best.damage) ||
+      (score === best.score && resolution.damage === best.damage && combo.length > best.length)
+    ) {
+      best = {
+        sequence: combo,
+        tiles,
+        damage: resolution.damage,
+        block: resolution.block,
+        score,
+        length: combo.length,
+      };
+    }
+  }
+
+  return best;
+};
+
+/** Check whether the submitted hand contains any accepted combo */
 export const isValidSequence = (committed) => {
-  const str = committed.join('');
-  return TUNING.acceptedSequences.includes(str);
+  return Boolean(findBestAcceptedSequence(committed));
 };
 
 export const abilityDescription = (key) => {
