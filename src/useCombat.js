@@ -245,6 +245,7 @@ export default function useCombat() {
   const selectCommittedTile = (index) => {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= committed.length) return;
+    if (committed[index] === undefined) return;
     setSelectedCommittedIndex((prev) => (prev === index ? null : index));
   };
 
@@ -259,14 +260,14 @@ export default function useCombat() {
         ? selectedCommittedIndex
         : committed.length - 1;
     const discardedCard = committed[discardIndex];
-    if (!discardedCard || discardedCard === 'E') return;
+    if (discardedCard === undefined) return;
 
     const cost = getDiscardCost();
     if (playerMana < cost) return;
 
     setPlayerMana((m) => m - cost);
 
-    // Put discarded action back into the deck and keep an empty card in hand.
+    // Put the discarded card back into the deck.
     setDeck((d) => [discardedCard, ...d]);
     setCommitted((c) => {
       const next = [...c];

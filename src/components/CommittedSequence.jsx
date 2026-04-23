@@ -39,19 +39,20 @@ export default function CommittedSequence({
       <div style={styles.committedRow}>
         {Array.from({ length: slotCount }).map((_, i) => {
           const tile = committed[i];
+          const isCard = tile !== undefined;
           const isActionTile = tile === 'A' || tile === 'D';
           const isEmptyCard = tile === 'E';
           const isUnfilled = tile === undefined;
           const isEmptyCell = isEmptyCard || isUnfilled;
-          const isSelected = isActionTile && selectedCommittedIndex === i;
+          const isSelected = isCard && selectedCommittedIndex === i;
           const canDropHere = dragOverIndex === i && isEmptyCell;
           const isDragging = draggingIndex === i;
           return (
             <button
               key={i}
               type="button"
-              onClick={() => isActionTile && onSelectCommittedTile(i)}
-              disabled={!isActionTile && !isEmptyCell}
+              onClick={() => isCard && onSelectCommittedTile(i)}
+              disabled={!isCard}
               draggable={isActionTile && hasEmptyCell}
               onDragStart={(e) => {
                 if (!isActionTile || !hasEmptyCell) return;
