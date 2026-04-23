@@ -19,9 +19,11 @@ export default function DraftArea({
   phase,
   currentRow,
   rerollLocked,
-  rerolledThisRound,
+  rerollsLeftRun,
   playerMana,
   discardCost,
+  picksUsed,
+  pickLimit,
   committedLength,
   selectedCommittedIndex,
   sequenceValid,
@@ -32,7 +34,7 @@ export default function DraftArea({
   onSubmit,
 }) {
   const rerollDisabled =
-    phase !== 'drafting' || rerollLocked || rerolledThisRound || playerMana < TUNING.draft.rerollCost;
+    phase !== 'drafting' || rerollLocked || rerollsLeftRun <= 0 || playerMana < TUNING.draft.rerollCost;
 
   const discardDisabled =
     phase !== 'drafting' ||
@@ -51,13 +53,13 @@ export default function DraftArea({
       {/* Pick counter + status hint */}
       <div style={styles.roundHeader}>
         <span style={styles.roundLabel}>
-          PICK {committedLength} / {TUNING.draft.maxSequence}
+          PICKS {picksUsed} / {pickLimit}
         </span>
         <span style={styles.hint}>
           {phase === 'drafting'
             ? sequenceFull
               ? 'max reached — submit or discard'
-              : 'choose one tile'
+              : `choose one tile • rerolls left: ${rerollsLeftRun}`
             : phase === 'resolving'
               ? 'resolving…'
               : ''}
@@ -93,7 +95,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>↻</span>
           <span>REROLL</span>
-          <span style={styles.ctrlCost}>{TUNING.draft.rerollCost} MP</span>
+          <span style={styles.ctrlCost}>{TUNING.draft.rerollCost} MP • {rerollsLeftRun} LEFT</span>
         </button>
 
         <button

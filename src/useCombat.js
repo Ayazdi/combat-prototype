@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
-import { rollRow, computeResolution, abilityDescription, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
+import { rollRow, weightedRoll, computeResolution, abilityDescription, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -23,8 +23,10 @@ export default function useCombat() {
   const [round, setRound] = useState(1);
   const [committed, setCommitted] = useState([]);
   const [selectedCommittedIndex, setSelectedCommittedIndex] = useState(null);
+  const [picksUsed, setPicksUsed] = useState(0);
+  const [pickLimit, setPickLimit] = useState(TUNING.draft.maxSequence);
   const [currentRow, setCurrentRow] = useState([]);
-  const [rerolledThisRound, setRerolledThisRound] = useState(false);
+  const [rerollsUsedRun, setRerollsUsedRun] = useState(0);
 
   // --- UI / phase state ---
   const [log, setLog] = useState([]);
@@ -92,8 +94,9 @@ export default function useCombat() {
     setEnemyTelegraph(msg);
     setCommitted([]);
     setSelectedCommittedIndex(null);
+    setPicksUsed(0);
+    setPickLimit(TUNING.draft.maxSequence);
     setRound(1);
-    setRerolledThisRound(false);
     setCurrentRow(rollRow(getRowWeights(1), TUNING.draft.rowSize));
     setPhase('drafting');
   };
@@ -119,22 +122,29 @@ export default function useCombat() {
   // Player actions
   // ----------------------------------------------------------
 
-  /** Pick a tile from the current draft row (up to maxSequence tiles) */
+  /**
+   * Pick one tile from the 4-card draft pool.
+   * The picked slot is immediately replaced using weighted roll.
+   */
   const pickTile = (idx) => {
     if (phase !== 'drafting') return;
-    if (committed.length >= TUNING.draft.maxSequence) return; // already at cap
+    if (picksUsed >= pickLimit) return;
     const tile = currentRow[idx];
     const newCommitted = [...committed, tile];
     setCommitted(newCommitted);
     // New picks become the currently selected committed tile.
     setSelectedCommittedIndex(newCommitted.length - 1);
+    setPicksUsed((v) => v + 1);
 
-    // Always roll a new row for the next pick (unless at cap)
-    if (newCommitted.length < TUNING.draft.maxSequence) {
-      setRound((r) => r + 1);
-      setRerolledThisRound(false);
-      setCurrentRow(rollRow(getRowWeights(round + 1), TUNING.draft.rowSize));
-    }
+    const nextRound = round + 1;
+    setRound(nextRound);
+
+    // Replace only the picked card with a new weighted card.
+    setCurrentRow((row) => {
+      const next = [...row];
+      next[idx] = weightedRoll(getRowWeights(nextRound));
+      return next;
+    });
   };
 
   /**
@@ -161,13 +171,14 @@ export default function useCombat() {
     }
   };
 
-  /** Spend mana to reroll the current draft row (once per round) */
+  /** Spend mana to reroll all 4 cards (max 2 per run) */
   const reroll = () => {
-    if (rerollLocked || rerolledThisRound) return;
+    if (rerollLocked) return;
+    if (rerollsUsedRun >= TUNING.draft.maxRerollsPerRun) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
     setCurrentRow(rollRow(getRowWeights(round), TUNING.draft.rowSize));
-    setRerolledThisRound(true);
+    setRerollsUsedRun((v) => v + 1);
   };
 
   /** Select a committed tile index to discard. Clicking again clears selection. */
@@ -177,7 +188,10 @@ export default function useCombat() {
     setSelectedCommittedIndex((prev) => (prev === index ? null : index));
   };
 
-  /** Spend mana to discard the selected committed tile. This does not modify the draft row. */
+  /**
+   * Spend mana to discard one selected committed tile.
+   * Discard grants +1 extra selection budget this turn.
+   */
   const discardSelected = () => {
     if (committed.length === 0) return;
     const discardIndex =
@@ -197,8 +211,8 @@ export default function useCombat() {
       return next;
     });
 
-    // Keep round in sync with pick count, but never below 1.
-    setRound((r) => Math.max(1, r - 1));
+    // Discard allows one additional pick this turn.
+    setPickLimit((limit) => limit + 1);
     setSelectedCommittedIndex(null);
   };
 
@@ -304,6 +318,8 @@ export default function useCombat() {
     setPlayerShield(0);
     setTurn(1);
     setLog([]);
+    // Restart starts a fresh run budget.
+    setRerollsUsedRun(0);
     setSelectedCommittedIndex(null);
     startTurn(1);
   };
@@ -315,7 +331,8 @@ export default function useCombat() {
   const preview = computeResolution(bestCombo ? bestCombo.tiles : []);
   const discardCost = getDiscardCost();
   const sequenceValid = isValidSequence(committed);
-  const sequenceFull = committed.length >= TUNING.draft.maxSequence;
+  const sequenceFull = picksUsed >= pickLimit;
+  const rerollsLeftRun = Math.max(0, TUNING.draft.maxRerollsPerRun - rerollsUsedRun);
 
   // ----------------------------------------------------------
   // Public API
@@ -332,8 +349,11 @@ export default function useCombat() {
       round,
       committed,
       selectedCommittedIndex,
+      picksUsed,
+      pickLimit,
       currentRow,
-      rerolledThisRound,
+      rerollsUsedRun,
+      rerollsLeftRun,
       rerollLocked,
       log,
       phase,

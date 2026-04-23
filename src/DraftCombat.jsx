@@ -47,9 +47,11 @@ export default function DraftCombat() {
           phase={state.phase}
           currentRow={state.currentRow}
           rerollLocked={state.rerollLocked}
-          rerolledThisRound={state.rerolledThisRound}
+          rerollsLeftRun={state.rerollsLeftRun}
           playerMana={state.playerMana}
           discardCost={state.discardCost}
+          picksUsed={state.picksUsed}
+          pickLimit={state.pickLimit}
           committedLength={state.committed.length}
                 selectedCommittedIndex={state.selectedCommittedIndex}
           sequenceValid={state.sequenceValid}

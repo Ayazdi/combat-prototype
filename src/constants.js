@@ -5,21 +5,23 @@ export const TUNING = {
   player: {
     maxHp: 250,
     maxMana: 100,
-    maxShield: 40,
+    maxShield: 50,
     manaRegenPerFoe: 20,
     startingMana: 100,
   },
   tiles: {
-    attackBase: 15,
-    defenceBase: 10,
+    attackBase: 25,
+    defenceBase: 20,
     attackCombos: { 2: 1.25, 3: 1.5, 4: 1.75, 5: 3.0 },
-    defenceCombos: { 2: 1.1, 3: 1.25, 4: 1.4, 5: 2.0 },
+    defenceCombos: { 2: 1.25, 3: 2, 4: 3, 5: 4 },
   },
   draft: {
-    rowSize: 4,
-    // Max tiles the player can commit before submitting
+    rowSize: 8,
+    // Base number of selections allowed each turn.
     maxSequence: 5,
-    rerollCost: 15,
+    // Total rerolls available across the whole run (enemy 1 -> final enemy).
+    maxRerollsPerRun: 2,
+    rerollCost: 25,
     discardCost: 25,
   },
   // Accepted combos. Submit can contain extra tiles/empties; the best
@@ -27,12 +29,12 @@ export const TUNING = {
   acceptedSequences: [
     'AA', 'AAA', 'AAAA', 'AAAAA',
     'DD', 'DDD', 'DDDD', 'DDDDD',
-    'AADD', 'AAADD', 'DDDAA',
+    'AADD', 'AAADD', 'DDDAA', 'DDAA',
   ],
   weights: {
-    A: 20,
-    D: 20,
-    E: 60,
+    A: 25,
+    D: 25,
+    E: 50,
   },
   enemies: [
     { id: 1, name: 'Slime', hp: 140, attack: 25, ability: null },
