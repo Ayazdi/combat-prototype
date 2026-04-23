@@ -24,6 +24,9 @@ export const TUNING = {
     rerollCost: 25,
     discardCost: 25,
   },
+  // Deck composition per battle — shuffled fresh when a new enemy fight begins.
+  // Total cards = sum of all values. Tune these to adjust tile frequency.
+  deckComposition: { A: 10, D: 8, E: 22 }, // 40 cards per battle
   // Accepted combos. Submit can contain extra tiles/empties; the best
   // available combo from this list is what gets resolved.
   acceptedSequences: [

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
-import { rollRow, weightedRoll, computeResolution, abilityDescription, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
+import { buildShuffledDeck, drawFromDeck, computeResolution, abilityDescription, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -27,6 +27,8 @@ export default function useCombat() {
   const [pickLimit, setPickLimit] = useState(TUNING.draft.maxSequence);
   const [currentRow, setCurrentRow] = useState([]);
   const [rerollsUsedRun, setRerollsUsedRun] = useState(0);
+  // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
+  const [deck, setDeck] = useState([]);
 
   // --- UI / phase state ---
   const [log, setLog] = useState([]);
@@ -47,17 +49,43 @@ export default function useCombat() {
   /** Append a line to the battle log */
   const addLog = (entry) => setLog((l) => [...l, entry]);
 
-  /** Adjust draft row weights based on enemy passive ability */
-  const getRowWeights = (roundNum) => {
-    const w = { ...TUNING.weights };
+  /** Return the deck composition for this battle, adjusted for the enemy passive. */
+  const getBattleDeckComposition = () => {
+    const base = { ...TUNING.deckComposition };
     if (enemy.ability === 'empty_plus') {
-      w.E += 15; w.A -= 8; w.D -= 7;
+      // Mage: heavier empty tile presence in the battle deck
+      base.E += 8; base.A = Math.max(1, base.A - 4); base.D = Math.max(1, base.D - 4);
     }
-    if (enemy.ability === 'no_first_defence' && roundNum === 1) {
-      w.D = 0;
-      w.A += 18; w.E += 17;
+    return base;
+  };
+
+  /**
+   * Shuffle a fresh deck for this battle and draw the initial card pool.
+   * Returns [remainingDeck, initialPool].
+   * Knight's no_first_defence swaps any D cards out of the initial pool.
+   */
+  const buildBattleDeck = () => {
+    const composition = getBattleDeckComposition();
+    let workingDeck = buildShuffledDeck(composition);
+    const initialPool = [];
+    for (let i = 0; i < TUNING.draft.rowSize; i++) {
+      const { card, deck: nextDeck } = drawFromDeck(workingDeck, composition);
+      workingDeck = nextDeck;
+      initialPool.push(card);
     }
-    return w;
+    if (enemy.ability === 'no_first_defence') {
+      // Remove D tiles from initial pool for Knight
+      for (let i = 0; i < initialPool.length; i++) {
+        let attempts = 0;
+        while (initialPool[i] === 'D' && workingDeck.length > 0 && attempts < 30) {
+          const { card, deck: nextDeck } = drawFromDeck(workingDeck, composition);
+          workingDeck = nextDeck;
+          if (card !== 'D') { initialPool[i] = card; break; }
+          attempts++;
+        }
+      }
+    }
+    return [workingDeck, initialPool];
   };
 
   /** Return the mana cost to discard (doubled by Witch passive) */
@@ -97,7 +125,6 @@ export default function useCombat() {
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
     setRound(1);
-    setCurrentRow(rollRow(getRowWeights(1), TUNING.draft.rowSize));
     setPhase('drafting');
   };
 
@@ -109,6 +136,10 @@ export default function useCombat() {
   useEffect(() => {
     addLog(`Battle begins: ${enemy.name} (${enemy.hp} HP, ${enemy.attack} ATK)`);
     if (enemy.ability) addLog(`Passive: ${abilityDescription(enemy.ability)}`);
+    // Build a fresh deck and initial card pool for this battle.
+    const [newDeck, initialPool] = buildBattleDeck();
+    setDeck(newDeck);
+    setCurrentRow(initialPool);
     startTurn(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemyIdx]);
@@ -137,12 +168,15 @@ export default function useCombat() {
     setPicksUsed((v) => v + 1);
 
     const nextRound = round + 1;
-    setRound(nextRound);
+    setRound((r) => r + 1);
 
-    // Replace only the picked card with a new weighted card.
+    // Draw the replacement card from the persistent battle deck.
+    const composition = getBattleDeckComposition();
+    const { card: newCard, deck: updatedDeck } = drawFromDeck(deck, composition);
+    setDeck(updatedDeck);
     setCurrentRow((row) => {
       const next = [...row];
-      next[idx] = weightedRoll(getRowWeights(nextRound));
+      next[idx] = newCard;
       return next;
     });
   };
@@ -177,7 +211,17 @@ export default function useCombat() {
     if (rerollsUsedRun >= TUNING.draft.maxRerollsPerRun) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
-    setCurrentRow(rollRow(getRowWeights(round), TUNING.draft.rowSize));
+    // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
+    const composition = getBattleDeckComposition();
+    let workingDeck = deck;
+    const newPool = [];
+    for (let i = 0; i < TUNING.draft.rowSize; i++) {
+      const { card, deck: nextDeck } = drawFromDeck(workingDeck, composition);
+      workingDeck = nextDeck;
+      newPool.push(card);
+    }
+    setDeck(workingDeck);
+    setCurrentRow(newPool);
     setRerollsUsedRun((v) => v + 1);
   };
 
@@ -321,6 +365,10 @@ export default function useCombat() {
     // Restart starts a fresh run budget.
     setRerollsUsedRun(0);
     setSelectedCommittedIndex(null);
+    // Rebuild the deck and pool for this fight.
+    const [newDeck, initialPool] = buildBattleDeck();
+    setDeck(newDeck);
+    setCurrentRow(initialPool);
     startTurn(1);
   };
 
@@ -353,6 +401,7 @@ export default function useCombat() {
       pickLimit,
       currentRow,
       rerollsUsedRun,
+      deckSize: deck.length,
       rerollsLeftRun,
       rerollLocked,
       log,

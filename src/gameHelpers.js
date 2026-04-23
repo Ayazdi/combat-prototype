@@ -102,3 +102,31 @@ export const abilityDescription = (key) => {
     default: return '';
   }
 };
+
+/**
+ * Build and return a shuffled deck array from a composition object.
+ * e.g. { A: 10, D: 8, E: 22 } → 40-element shuffled array.
+ */
+export const buildShuffledDeck = (composition) => {
+  const deck = [];
+  for (const [type, count] of Object.entries(composition)) {
+    for (let i = 0; i < count; i++) deck.push(type);
+  }
+  // Fisher-Yates shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+};
+
+/**
+ * Draw one card from the end of the deck array.
+ * If the deck is empty, auto-reshuffles from fallbackComposition before drawing.
+ * Returns { card, deck } — the drawn card and the remaining deck (new array).
+ */
+export const drawFromDeck = (deck, fallbackComposition) => {
+  const d = deck.length > 0 ? deck : buildShuffledDeck(fallbackComposition);
+  const card = d[d.length - 1];
+  return { card, deck: d.slice(0, -1) };
+};
