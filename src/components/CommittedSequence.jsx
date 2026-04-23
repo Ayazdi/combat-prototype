@@ -1,5 +1,4 @@
-import React from 'react';
-import { TUNING } from '../constants';
+import React, { useState } from 'react';
 import { styles } from '../styles';
 import { tileGlyph, tileStyle } from '../tileHelpers';
 
@@ -10,10 +9,20 @@ import { tileGlyph, tileStyle } from '../tileHelpers';
 // ============================================================
 export default function CommittedSequence({
   committed,
+  slotCount,
   preview,
   selectedCommittedIndex,
   onSelectCommittedTile,
+  onMoveCommittedTile,
 }) {
+  const [draggingIndex, setDraggingIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  const hasEmptyCell = Array.from({ length: slotCount }).some((_, i) => {
+    const tile = committed[i];
+    return tile === undefined || tile === 'E';
+  });
+
   return (
     <section style={styles.committedArea}>
       {/* Header row: label + live dmg / block totals */}
@@ -26,26 +35,60 @@ export default function CommittedSequence({
         </span>
       </div>
 
-      {/* Tile slots — 5 slots (maxSequence), filled or dashed-empty */}
+      {/* Tile slots — supports empty-cell movement via drag and drop */}
       <div style={styles.committedRow}>
-        {Array.from({ length: TUNING.draft.maxSequence }).map((_, i) => {
+        {Array.from({ length: slotCount }).map((_, i) => {
           const tile = committed[i];
-          const isSelected = tile && selectedCommittedIndex === i;
+          const isActionTile = tile === 'A' || tile === 'D';
+          const isEmptyCard = tile === 'E';
+          const isUnfilled = tile === undefined;
+          const isEmptyCell = isEmptyCard || isUnfilled;
+          const isSelected = isActionTile && selectedCommittedIndex === i;
+          const canDropHere = dragOverIndex === i && isEmptyCell;
+          const isDragging = draggingIndex === i;
           return (
             <button
               key={i}
               type="button"
-              onClick={() => tile && onSelectCommittedTile(i)}
-              disabled={!tile}
+              onClick={() => isActionTile && onSelectCommittedTile(i)}
+              disabled={!isActionTile && !isEmptyCell}
+              draggable={isActionTile && hasEmptyCell}
+              onDragStart={(e) => {
+                if (!isActionTile || !hasEmptyCell) return;
+                e.dataTransfer.effectAllowed = 'move';
+                setDraggingIndex(i);
+              }}
+              onDragEnd={() => {
+                setDraggingIndex(null);
+                setDragOverIndex(null);
+              }}
+              onDragOver={(e) => {
+                if (draggingIndex === null || !isEmptyCell) return;
+                e.preventDefault();
+                setDragOverIndex(i);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggingIndex === null || !isEmptyCell) return;
+                onMoveCommittedTile(draggingIndex, i);
+                setDraggingIndex(null);
+                setDragOverIndex(null);
+              }}
               style={{
                 ...styles.committedSlot,
-                ...(tile ? tileStyle(tile) : styles.committedEmpty),
+                ...(isUnfilled
+                  ? styles.committedEmpty
+                  : tileStyle(tile)),
                 ...(isSelected ? styles.committedSelected : {}),
+                ...(canDropHere ? styles.committedDropTarget : {}),
+                ...(isDragging ? styles.committedDragging : {}),
               }}
-              className="committed-slot-btn"
+              className={`committed-slot-btn${isDragging ? ' committed-slot-dragging' : ''}`}
             >
-              {tile ? (
+              {!isEmptyCell ? (
                 tileGlyph(tile)
+              ) : isEmptyCard ? (
+                tileGlyph('E')
               ) : (
                 <span style={styles.slotNum}>{i + 1}</span>
               )}

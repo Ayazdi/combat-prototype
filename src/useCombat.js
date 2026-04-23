@@ -163,10 +163,20 @@ export default function useCombat() {
     if (phase !== 'drafting') return;
     if (picksUsed >= pickLimit) return;
     const tile = currentRow[idx];
-    const newCommitted = [...committed, tile];
+    // Fill the first empty cell (E) if present, otherwise append.
+    const emptyIndex = committed.findIndex((t) => t === 'E');
+    const newCommitted = [...committed];
+    let placedIndex = 0;
+    if (emptyIndex >= 0) {
+      newCommitted[emptyIndex] = tile;
+      placedIndex = emptyIndex;
+    } else {
+      newCommitted.push(tile);
+      placedIndex = newCommitted.length - 1;
+    }
     setCommitted(newCommitted);
     // New picks become the currently selected committed tile.
-    setSelectedCommittedIndex(newCommitted.length - 1);
+    setSelectedCommittedIndex(placedIndex);
     setPicksUsed((v) => v + 1);
 
     const nextRound = round + 1;
@@ -248,21 +258,51 @@ export default function useCombat() {
       selectedCommittedIndex !== null && selectedCommittedIndex >= 0 && selectedCommittedIndex < committed.length
         ? selectedCommittedIndex
         : committed.length - 1;
+    const discardedCard = committed[discardIndex];
+    if (!discardedCard || discardedCard === 'E') return;
 
     const cost = getDiscardCost();
     if (playerMana < cost) return;
 
     setPlayerMana((m) => m - cost);
 
-    // Remove one committed tile and let the rest shift left naturally.
+    // Put discarded action back into the deck and keep an empty card in hand.
+    setDeck((d) => [discardedCard, ...d]);
     setCommitted((c) => {
       const next = [...c];
-      next.splice(discardIndex, 1);
+      next[discardIndex] = 'E';
       return next;
     });
 
     // Discard allows one additional pick this turn.
     setPickLimit((limit) => limit + 1);
+    setSelectedCommittedIndex(null);
+  };
+
+  /** Move one action card to an empty hand cell (E or not-yet-filled slot). */
+  const moveCommittedTile = (fromIndex, toIndex) => {
+    if (phase !== 'drafting') return;
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0 || toIndex >= pickLimit) return;
+
+    setCommitted((c) => {
+      const source = c[fromIndex];
+      if (!source || source === 'E') return c;
+
+      const hasEmptyCell = c.includes('E') || c.length < pickLimit;
+      if (!hasEmptyCell) return c;
+
+      const target = c[toIndex];
+      const targetIsEmpty = target === undefined || target === 'E';
+      if (!targetIsEmpty) return c;
+
+      const next = [...c];
+      while (next.length <= toIndex) next.push('E');
+      next[toIndex] = source;
+      next[fromIndex] = 'E';
+      return next;
+    });
+
     setSelectedCommittedIndex(null);
   };
 
@@ -431,6 +471,7 @@ export default function useCombat() {
     actions: {
       pickTile,
       selectCommittedTile,
+      moveCommittedTile,
       reroll,
       discardSelected,
       submitSequence,

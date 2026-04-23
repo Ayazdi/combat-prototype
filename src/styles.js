@@ -43,6 +43,9 @@ export const globalCss = `
   .committed-slot-btn:disabled {
     cursor: default;
   }
+  .committed-slot-dragging {
+    animation: dragPulse 0.45s ease-in-out infinite alternate;
+  }
 
   /* Victory / defeat overlay buttons */
   .overlay-btn {
@@ -58,6 +61,10 @@ export const globalCss = `
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes dragPulse {
+    from { transform: scale(0.96); filter: brightness(0.95); }
+    to { transform: scale(1.04); filter: brightness(1.08); }
   }
 `;
 
@@ -359,6 +366,13 @@ export const styles = {
   committedSelected: {
     boxShadow: '0 0 0 2px rgba(232, 201, 140, 0.85), 0 0 14px rgba(212, 162, 76, 0.4)',
     borderColor: '#e8c98c',
+  },
+  committedDropTarget: {
+    boxShadow: '0 0 0 2px rgba(74, 139, 194, 0.7), 0 0 14px rgba(74, 139, 194, 0.35)',
+    borderColor: '#4a8bc2',
+  },
+  committedDragging: {
+    opacity: 0.72,
   },
   committedEmpty: {
     background: '#0d0a08',

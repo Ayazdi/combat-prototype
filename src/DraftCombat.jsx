@@ -69,9 +69,11 @@ export default function DraftCombat() {
         {/* Committed tile sequence + live damage/block preview */}
         <CommittedSequence
           committed={state.committed}
+          slotCount={state.pickLimit}
           preview={state.preview}
           selectedCommittedIndex={state.selectedCommittedIndex}
           onSelectCommittedTile={actions.selectCommittedTile}
+          onMoveCommittedTile={actions.moveCommittedTile}
         />
 
         {/* Scrollable battle log */}
