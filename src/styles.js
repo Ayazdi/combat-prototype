@@ -195,6 +195,22 @@ export const styles = {
     borderRadius: 2,
   },
   telegraphIcon: { marginRight: 4 },
+  telegraphQueue: {
+    marginTop: 8,
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  telegraphChip: {
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    color: '#c9b28a',
+    border: '1px solid rgba(212, 162, 76, 0.25)',
+    background: 'rgba(20, 17, 14, 0.85)',
+    padding: '3px 6px',
+    borderRadius: 2,
+  },
 
   // --- Versus divider ---
   versus: {

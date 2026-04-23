@@ -20,7 +20,7 @@ export default function CommittedSequence({
 
   const hasEmptyCell = Array.from({ length: slotCount }).some((_, i) => {
     const tile = committed[i];
-    return tile === undefined || tile === 'E';
+    return tile === undefined || tile === null;
   });
 
   return (
@@ -39,11 +39,11 @@ export default function CommittedSequence({
       <div style={styles.committedRow}>
         {Array.from({ length: slotCount }).map((_, i) => {
           const tile = committed[i];
-          const isCard = tile !== undefined;
+          const isCard = tile !== undefined && tile !== null;
           const isActionTile = tile === 'A' || tile === 'D';
           const isEmptyCard = tile === 'E';
-          const isUnfilled = tile === undefined;
-          const isEmptyCell = isEmptyCard || isUnfilled;
+          const isUnfilled = tile === undefined || tile === null;
+          const isEmptyCell = isUnfilled;
           const isSelected = isCard && selectedCommittedIndex === i;
           const canDropHere = dragOverIndex === i && isEmptyCell;
           const isDragging = draggingIndex === i;
@@ -107,7 +107,7 @@ export default function CommittedSequence({
             <span key={i} style={styles.segChip}>
               {s.type === 'A' && `${'A'.repeat(s.count)} ×${s.mult} = ${s.damage}`}
               {s.type === 'D' && `${'D'.repeat(s.count)} ×${s.mult} = ${s.block}`}
-              {s.type === 'E' && 'EMPTY'}
+              {s.type === 'E' && 'NO ACTION'}
             </span>
           ))
         )}

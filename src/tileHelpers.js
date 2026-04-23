@@ -1,5 +1,5 @@
 export const tileGlyph = (t) => (t === 'A' ? '⚔' : t === 'D' ? '⛨' : '·');
-export const tileLabel = (t) => (t === 'A' ? 'ATTACK' : t === 'D' ? 'DEFENCE' : 'EMPTY');
+export const tileLabel = (t) => (t === 'A' ? 'ATTACK' : t === 'D' ? 'DEFENCE' : 'NO ACTION');
 
 export const tileStyle = (t) => {
   if (t === 'A') return {

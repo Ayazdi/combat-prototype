@@ -27,6 +27,13 @@ export const TUNING = {
   // Deck composition per battle — shuffled fresh when a new enemy fight begins.
   // Total cards = sum of all values. Tune these to adjust tile frequency.
   deckComposition: { A: 10, D: 8, E: 22 }, // 40 cards per battle
+  enemyAI: {
+    // Weighted random enemy intent: 2 attacks for each 1 defend on average.
+    intentWeights: { attack: 2, defend: 1 },
+    // Level 1 defend amount starts at 10 and scales by enemy level.
+    defendBaseShield: 10,
+    defendShieldPerLevel: 5,
+  },
   // Accepted combos. Submit can contain extra tiles/empties; the best
   // available combo from this list is what gets resolved.
   acceptedSequences: [

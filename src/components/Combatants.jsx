@@ -12,7 +12,9 @@ export default function Combatants({
   playerShield,
   enemy,
   enemyHp,
+  enemyShield,
   enemyTelegraph,
+  enemyIntentQueue,
 }) {
   return (
     <section style={styles.combatants}>
@@ -64,9 +66,30 @@ export default function Combatants({
           gradient="linear-gradient(90deg, #7a2a2a 0%, #a64444 100%)"
         />
 
-        {/* Enemy telegraph — shows what the enemy will do this turn */}
+        {/* Enemy shield bar */}
+        <StatBar
+          label="SH"
+          current={enemyShield}
+          max={Math.max(enemy.hp, 1)}
+          gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
+        />
+
+        {/* Enemy telegraph — shows optional status + current and next intents */}
         <div style={styles.telegraph}>
-          <span style={styles.telegraphIcon}>⚔</span> {enemyTelegraph}
+          {enemyTelegraph ? (
+            <div>
+              <span style={styles.telegraphIcon}>⚔</span> {enemyTelegraph}
+            </div>
+          ) : null}
+          {enemyIntentQueue?.length > 0 && (
+            <div style={styles.telegraphQueue}>
+              {enemyIntentQueue.slice(0, 2).map((intent, i) => (
+                <span key={i} style={styles.telegraphChip}>
+                  {i === 0 ? 'NOW' : 'NEXT'}: {intent.text}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

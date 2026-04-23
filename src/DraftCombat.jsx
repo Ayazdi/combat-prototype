@@ -38,7 +38,9 @@ export default function DraftCombat() {
           playerShield={state.playerShield}
           enemy={state.enemy}
           enemyHp={state.enemyHp}
+          enemyShield={state.enemyShield}
           enemyTelegraph={state.enemyTelegraph}
+          enemyIntentQueue={state.enemyIntentQueue}
         />
 
         {/* Tile draft row + reroll / discard / submit controls */}
@@ -69,7 +71,7 @@ export default function DraftCombat() {
         {/* Committed tile sequence + live damage/block preview */}
         <CommittedSequence
           committed={state.committed}
-          slotCount={state.pickLimit}
+          slotCount={state.handSlotCount}
           preview={state.preview}
           selectedCommittedIndex={state.selectedCommittedIndex}
           onSelectCommittedTile={actions.selectCommittedTile}

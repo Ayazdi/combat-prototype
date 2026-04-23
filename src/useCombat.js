@@ -17,6 +17,7 @@ export default function useCombat() {
   const [playerMana, setPlayerMana] = useState(TUNING.player.startingMana);
   const [playerShield, setPlayerShield] = useState(0);
   const [enemyHp, setEnemyHp] = useState(TUNING.enemies[0].hp);
+  const [enemyShield, setEnemyShield] = useState(0);
 
   // --- Turn / draft tracking ---
   const [turn, setTurn] = useState(1);
@@ -30,16 +31,20 @@ export default function useCombat() {
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
   const [deckShuffleCount, setDeckShuffleCount] = useState(1);
+  const handSlotCount = TUNING.draft.maxSequence;
 
   // --- UI / phase state ---
   const [log, setLog] = useState([]);
   const [phase, setPhase] = useState('drafting'); // drafting | resolving | victory | defeat
   const [incomingDamage, setIncomingDamage] = useState(0);
   const [enemyTelegraph, setEnemyTelegraph] = useState('');
+  const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
   const [rerollLocked, setRerollLocked] = useState(false);
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
+  // Intent bag ensures 2:1 attack:defend ratio with random order.
+  const enemyIntentBagRef = useRef([]);
 
   const enemy = TUNING.enemies[enemyIdx];
 
@@ -96,31 +101,86 @@ export default function useCombat() {
       : TUNING.draft.discardCost;
   };
 
+  /** Enemy defend amount scales by enemy level (id). */
+  const getEnemyDefendShield = () => {
+    return TUNING.enemyAI.defendBaseShield + (enemy.id - 1) * TUNING.enemyAI.defendShieldPerLevel;
+  };
+
+  const refillEnemyIntentBag = () => {
+    const bag = [];
+    const attackWeight = TUNING.enemyAI.intentWeights.attack || 0;
+    const defendWeight = TUNING.enemyAI.intentWeights.defend || 0;
+    for (let i = 0; i < attackWeight; i++) bag.push('attack');
+    for (let i = 0; i < defendWeight; i++) bag.push('defend');
+    for (let i = bag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [bag[i], bag[j]] = [bag[j], bag[i]];
+    }
+    enemyIntentBagRef.current = bag;
+  };
+
+  const drawEnemyIntentType = () => {
+    if (enemyIntentBagRef.current.length === 0) refillEnemyIntentBag();
+    return enemyIntentBagRef.current.pop() || 'attack';
+  };
+
+  /** Build a weighted random enemy intent for a specific turn number. */
+  const rollEnemyIntent = (turnNum) => {
+    let type = drawEnemyIntentType();
+    let amount = 0;
+    let text = '';
+
+    // Goblin charged-strike keeps priority on every 3rd turn.
+    if (enemy.ability === 'charged_strike' && turnNum % 3 === 0) {
+      type = 'attack';
+      amount = 60;
+      text = `ATTACK ${amount} (CHARGED)`;
+      return { type, amount, text };
+    }
+
+    if (type === 'attack') {
+      amount = enemy.attack;
+      text = `ATTACK ${amount}`;
+    } else {
+      amount = getEnemyDefendShield();
+      text = `SHIELD +${amount}`;
+    }
+
+    return { type, amount, text };
+  };
+
+  /** Ensure we always have exactly two upcoming intents in the queue. */
+  const buildIntentQueue = (turnNum, existing = []) => {
+    const q = [...existing];
+    while (q.length < 2) {
+      const futureTurn = turnNum + q.length;
+      q.push(rollEnemyIntent(futureTurn));
+    }
+    return q.slice(0, 2);
+  };
+
   // ----------------------------------------------------------
   // Turn lifecycle
   // ----------------------------------------------------------
 
-  /** Reset draft state and roll the first row for a new turn */
-  const startTurn = (turnNum) => {
-    let dmg = enemy.attack;
-    let msg = `${enemy.name} will strike for ${dmg}`;
+  /** Reset draft state and initialize telegraphed enemy intents for a new turn */
+  const startTurn = (turnNum, queueOverride = null) => {
+    const queue = buildIntentQueue(turnNum, queueOverride || enemyIntentQueue);
+    setEnemyIntentQueue(queue);
 
-    // Goblin charged-strike every 3rd turn
-    if (enemy.ability === 'charged_strike' && turnNum % 3 === 0) {
-      dmg = 60;
-      msg = `⚡ ${enemy.name} is charging — ${dmg} damage!`;
-    }
+    const currentIntent = queue[0] || { type: 'attack', amount: enemy.attack, text: `ATTACK ${enemy.attack}` };
+    const incoming = currentIntent.type === 'attack' ? currentIntent.amount : 0;
 
     // Warden reroll-lock on turns 3 & 6
     if (enemy.ability === 'reroll_lock' && (turnNum === 3 || turnNum === 6)) {
       setRerollLocked(true);
-      msg += ' • Reroll locked';
     } else {
       setRerollLocked(false);
     }
 
-    setIncomingDamage(dmg);
-    setEnemyTelegraph(msg);
+    setIncomingDamage(incoming);
+    const lockText = enemy.ability === 'reroll_lock' && (turnNum === 3 || turnNum === 6) ? ' • Reroll locked' : '';
+    setEnemyTelegraph(lockText ? `REROLL LOCKED${lockText}` : '');
     setCommitted([]);
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
@@ -142,7 +202,11 @@ export default function useCombat() {
     setDeck(newDeck);
     setCurrentRow(initialPool);
     setDeckShuffleCount(1);
-    startTurn(1);
+    enemyIntentBagRef.current = [];
+    setEnemyShield(0);
+    const initialQueue = buildIntentQueue(1);
+    setEnemyIntentQueue(initialQueue);
+    startTurn(1, initialQueue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemyIdx]);
 
@@ -163,16 +227,18 @@ export default function useCombat() {
     if (phase !== 'drafting') return;
     if (picksUsed >= pickLimit) return;
     const tile = currentRow[idx];
-    // Fill the first empty cell (E) if present, otherwise append.
-    const emptyIndex = committed.findIndex((t) => t === 'E');
+    // Fill only truly empty slots (undefined/null). E is a real card in hand.
+    const emptyIndex = committed.findIndex((t) => t === undefined || t === null);
     const newCommitted = [...committed];
     let placedIndex = 0;
     if (emptyIndex >= 0) {
       newCommitted[emptyIndex] = tile;
       placedIndex = emptyIndex;
-    } else {
+    } else if (newCommitted.length < handSlotCount) {
       newCommitted.push(tile);
       placedIndex = newCommitted.length - 1;
+    } else {
+      return;
     }
     setCommitted(newCommitted);
     // New picks become the currently selected committed tile.
@@ -245,7 +311,7 @@ export default function useCombat() {
   const selectCommittedTile = (index) => {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= committed.length) return;
-    if (committed[index] === undefined) return;
+    if (committed[index] === undefined || committed[index] === null) return;
     setSelectedCommittedIndex((prev) => (prev === index ? null : index));
   };
 
@@ -260,7 +326,7 @@ export default function useCombat() {
         ? selectedCommittedIndex
         : committed.length - 1;
     const discardedCard = committed[discardIndex];
-    if (discardedCard === undefined) return;
+    if (discardedCard === undefined || discardedCard === null) return;
 
     const cost = getDiscardCost();
     if (playerMana < cost) return;
@@ -271,7 +337,8 @@ export default function useCombat() {
     setDeck((d) => [discardedCard, ...d]);
     setCommitted((c) => {
       const next = [...c];
-      next[discardIndex] = 'E';
+      // Discarded card leaves an empty slot, not a new slot.
+      next[discardIndex] = null;
       return next;
     });
 
@@ -280,27 +347,27 @@ export default function useCombat() {
     setSelectedCommittedIndex(null);
   };
 
-  /** Move one action card to an empty hand cell (E or not-yet-filled slot). */
+  /** Move one action card to an empty hand slot (null/undefined only). */
   const moveCommittedTile = (fromIndex, toIndex) => {
     if (phase !== 'drafting') return;
     if (fromIndex === toIndex) return;
-    if (fromIndex < 0 || toIndex < 0 || toIndex >= pickLimit) return;
+    if (fromIndex < 0 || toIndex < 0 || toIndex >= handSlotCount) return;
 
     setCommitted((c) => {
       const source = c[fromIndex];
       if (!source || source === 'E') return c;
 
-      const hasEmptyCell = c.includes('E') || c.length < pickLimit;
+      const hasEmptyCell = c.includes(null) || c.length < handSlotCount;
       if (!hasEmptyCell) return c;
 
       const target = c[toIndex];
-      const targetIsEmpty = target === undefined || target === 'E';
+      const targetIsEmpty = target === undefined || target === null;
       if (!targetIsEmpty) return c;
 
       const next = [...c];
-      while (next.length <= toIndex) next.push('E');
+      while (next.length <= toIndex) next.push(null);
       next[toIndex] = source;
-      next[fromIndex] = 'E';
+      next[fromIndex] = null;
       return next;
     });
 
@@ -340,8 +407,15 @@ export default function useCombat() {
     }
     addLog(logParts.join(' / '));
 
-    // --- Apply player damage to enemy ---
-    const newEnemyHp = Math.max(0, enemyHp - damage);
+    // --- Apply player damage to enemy (enemy shield absorbs first) ---
+    const enemyAbsorbed = Math.min(enemyShield, damage);
+    const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
+    const dealtToHp = damage - enemyAbsorbed;
+    const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
+    if (enemyAbsorbed > 0) {
+      addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
+    }
+    setEnemyShield(enemyShieldAfterHit);
     setEnemyHp(newEnemyHp);
 
     if (newEnemyHp <= 0) {
@@ -354,20 +428,33 @@ export default function useCombat() {
       return;
     }
 
-    // --- Enemy attacks the player (shield absorbs first) ---
-    const rawDmg = incomingDamage;
-    const absorbed = Math.min(shieldAfterGain, rawDmg);
-    const shieldAfterHit = shieldAfterGain - absorbed;
-    const taken = rawDmg - absorbed;
-    const newPlayerHp = Math.max(0, playerHp - taken);
+    // --- Enemy executes current intent (attack or defend) ---
+    const currentIntent = enemyIntentQueue[0] || { type: 'attack', amount: incomingDamage };
+    let shieldAfterEnemyAction = enemyShieldAfterHit;
+    let newPlayerHp = playerHp;
 
-    if (absorbed > 0) {
-      addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+    if (currentIntent.type === 'defend') {
+      shieldAfterEnemyAction += currentIntent.amount;
+      setEnemyShield(shieldAfterEnemyAction);
+      addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
     } else {
-      addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
+      const rawDmg = currentIntent.amount;
+      const absorbed = Math.min(shieldAfterGain, rawDmg);
+      const shieldAfterHit = shieldAfterGain - absorbed;
+      const taken = rawDmg - absorbed;
+      newPlayerHp = Math.max(0, playerHp - taken);
+
+      if (absorbed > 0) {
+        addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+      } else {
+        addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
+      }
+      setPlayerShield(shieldAfterHit);
     }
 
-    setPlayerShield(shieldAfterHit);
+    if (currentIntent.type === 'defend') {
+      setPlayerShield(shieldAfterGain);
+    }
     setPlayerHp(newPlayerHp);
 
     if (newPlayerHp <= 0) {
@@ -379,8 +466,10 @@ export default function useCombat() {
     // Advance to the next turn after a brief pause
     setTimeout(() => {
       const nextTurn = turn + 1;
+      const nextQueue = buildIntentQueue(nextTurn, enemyIntentQueue.slice(1));
+      setEnemyIntentQueue(nextQueue);
       setTurn(nextTurn);
-      startTurn(nextTurn);
+      startTurn(nextTurn, nextQueue);
     }, 1200);
   };
 
@@ -394,6 +483,7 @@ export default function useCombat() {
       const next = enemyIdx + 1;
       setEnemyIdx(next);
       setEnemyHp(TUNING.enemies[next].hp);
+      setEnemyShield(0);
       // Carry current HP/MP to the next fight; no recovery between foes.
       setPlayerShield(0);
       setTurn(1);
@@ -407,6 +497,7 @@ export default function useCombat() {
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
     setPlayerShield(0);
+    setEnemyShield(0);
     setTurn(1);
     setLog([]);
     // Restart starts a fresh run budget.
@@ -442,6 +533,7 @@ export default function useCombat() {
       enemy,
       enemyIdx,
       enemyHp,
+      enemyShield,
       playerHp,
       playerMana,
       playerShield,
@@ -451,6 +543,7 @@ export default function useCombat() {
       selectedCommittedIndex,
       picksUsed,
       pickLimit,
+      handSlotCount,
       currentRow,
       rerollsUsedRun,
       deckSize: deck.length,
@@ -463,6 +556,7 @@ export default function useCombat() {
       phase,
       incomingDamage,
       enemyTelegraph,
+      enemyIntentQueue,
       preview,
       discardCost,
       sequenceValid,
