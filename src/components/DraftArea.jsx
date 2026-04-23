@@ -22,6 +22,10 @@ export default function DraftArea({
   rerollsLeftRun,
   playerMana,
   discardCost,
+  deckSize,
+  deckCounts,
+  deckShuffleCount,
+  deckIsShuffled,
   picksUsed,
   pickLimit,
   committedLength,
@@ -80,6 +84,16 @@ export default function DraftArea({
             <div style={styles.tileLabel}>{tileLabel(tile)}</div>
           </button>
         ))}
+      </div>
+
+      {/* Deck tracking panel */}
+      <div style={styles.deckInfo}>
+        <span style={styles.deckChip}>LEFT: {deckSize}</span>
+        <span style={styles.deckChip}>A: {deckCounts?.A ?? 0}</span>
+        <span style={styles.deckChip}>D: {deckCounts?.D ?? 0}</span>
+        <span style={styles.deckChip}>E: {deckCounts?.E ?? 0}</span>
+        <span style={styles.deckChip}>SHUFFLED: {deckIsShuffled ? 'YES' : 'NO'}</span>
+        <span style={styles.deckChip}>SHUFFLES: {deckShuffleCount}</span>
       </div>
 
       {/* Reroll / Discard / Submit controls */}

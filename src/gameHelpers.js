@@ -123,10 +123,12 @@ export const buildShuffledDeck = (composition) => {
 /**
  * Draw one card from the end of the deck array.
  * If the deck is empty, auto-reshuffles from fallbackComposition before drawing.
- * Returns { card, deck } — the drawn card and the remaining deck (new array).
+ * Returns { card, deck, reshuffled } — the drawn card, remaining deck,
+ * and whether this draw had to reshuffle first.
  */
 export const drawFromDeck = (deck, fallbackComposition) => {
-  const d = deck.length > 0 ? deck : buildShuffledDeck(fallbackComposition);
+  const reshuffled = deck.length === 0;
+  const d = reshuffled ? buildShuffledDeck(fallbackComposition) : deck;
   const card = d[d.length - 1];
-  return { card, deck: d.slice(0, -1) };
+  return { card, deck: d.slice(0, -1), reshuffled };
 };

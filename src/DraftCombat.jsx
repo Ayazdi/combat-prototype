@@ -50,6 +50,10 @@ export default function DraftCombat() {
           rerollsLeftRun={state.rerollsLeftRun}
           playerMana={state.playerMana}
           discardCost={state.discardCost}
+          deckSize={state.deckSize}
+          deckCounts={state.deckCounts}
+          deckShuffleCount={state.deckShuffleCount}
+          deckIsShuffled={state.deckIsShuffled}
           picksUsed={state.picksUsed}
           pickLimit={state.pickLimit}
           committedLength={state.committed.length}

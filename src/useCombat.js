@@ -29,6 +29,7 @@ export default function useCombat() {
   const [rerollsUsedRun, setRerollsUsedRun] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
+  const [deckShuffleCount, setDeckShuffleCount] = useState(1);
 
   // --- UI / phase state ---
   const [log, setLog] = useState([]);
@@ -140,6 +141,7 @@ export default function useCombat() {
     const [newDeck, initialPool] = buildBattleDeck();
     setDeck(newDeck);
     setCurrentRow(initialPool);
+    setDeckShuffleCount(1);
     startTurn(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemyIdx]);
@@ -172,8 +174,9 @@ export default function useCombat() {
 
     // Draw the replacement card from the persistent battle deck.
     const composition = getBattleDeckComposition();
-    const { card: newCard, deck: updatedDeck } = drawFromDeck(deck, composition);
+    const { card: newCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
+    if (reshuffled) setDeckShuffleCount((v) => v + 1);
     setCurrentRow((row) => {
       const next = [...row];
       next[idx] = newCard;
@@ -214,13 +217,16 @@ export default function useCombat() {
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
     const composition = getBattleDeckComposition();
     let workingDeck = deck;
+    let reshuffleHits = 0;
     const newPool = [];
     for (let i = 0; i < TUNING.draft.rowSize; i++) {
-      const { card, deck: nextDeck } = drawFromDeck(workingDeck, composition);
+      const { card, deck: nextDeck, reshuffled } = drawFromDeck(workingDeck, composition);
       workingDeck = nextDeck;
+      if (reshuffled) reshuffleHits += 1;
       newPool.push(card);
     }
     setDeck(workingDeck);
+    if (reshuffleHits > 0) setDeckShuffleCount((v) => v + reshuffleHits);
     setCurrentRow(newPool);
     setRerollsUsedRun((v) => v + 1);
   };
@@ -369,6 +375,7 @@ export default function useCombat() {
     const [newDeck, initialPool] = buildBattleDeck();
     setDeck(newDeck);
     setCurrentRow(initialPool);
+    setDeckShuffleCount(1);
     startTurn(1);
   };
 
@@ -381,6 +388,10 @@ export default function useCombat() {
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = picksUsed >= pickLimit;
   const rerollsLeftRun = Math.max(0, TUNING.draft.maxRerollsPerRun - rerollsUsedRun);
+  const deckCounts = deck.reduce((acc, card) => {
+    acc[card] = (acc[card] || 0) + 1;
+    return acc;
+  }, { A: 0, D: 0, E: 0 });
 
   // ----------------------------------------------------------
   // Public API
@@ -402,6 +413,9 @@ export default function useCombat() {
       currentRow,
       rerollsUsedRun,
       deckSize: deck.length,
+      deckCounts,
+      deckShuffleCount,
+      deckIsShuffled: true,
       rerollsLeftRun,
       rerollLocked,
       log,

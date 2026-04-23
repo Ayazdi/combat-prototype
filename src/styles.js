@@ -255,6 +255,21 @@ export const styles = {
     opacity: 0.85,
     fontWeight: 600,
   },
+  deckInfo: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  deckChip: {
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    color: '#8a8070',
+    border: '1px solid #2a2418',
+    background: '#11100d',
+    padding: '4px 8px',
+    borderRadius: 2,
+  },
 
   // --- Reroll / discard / submit controls ---
   controls: {
