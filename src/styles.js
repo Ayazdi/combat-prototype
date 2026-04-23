@@ -1,0 +1,441 @@
+// ============================================================
+// GLOBAL CSS — injected via <style> tag in the root component.
+// Handles hover effects, transitions, and keyframe animations
+// that can't be expressed with inline styles alone.
+// ============================================================
+export const globalCss = `
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  /* Draft tile hover lift */
+  .tile-btn {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .tile-btn:not(:disabled):hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(212, 162, 76, 0.4);
+  }
+  .tile-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  /* Reroll / discard button hover glow */
+  .ctrl-btn {
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .ctrl-btn:not(:disabled):hover {
+    background: #2a2318 !important;
+    border-color: #d4a24c !important;
+    color: #e8c98c !important;
+  }
+
+  /* Victory / defeat overlay buttons */
+  .overlay-btn {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .overlay-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  }
+
+  /* Entrance animation for tiles and overlays */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+`;
+
+// ============================================================
+// INLINE STYLES — organised by UI section so each component
+// can import only the keys it needs.
+// ============================================================
+export const styles = {
+  // --- Root wrapper ---
+  root: {
+    minHeight: '100vh',
+    width: '100%',
+    background: 'radial-gradient(ellipse at top, #1a1612 0%, #0d0a08 60%, #070504 100%)',
+    fontFamily: '"JetBrains Mono", monospace',
+    color: '#d8cfc2',
+    padding: '24px 16px',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  bgGrain: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E")`,
+    opacity: 0.08,
+    pointerEvents: 'none',
+    mixBlendMode: 'overlay',
+  },
+  frame: {
+    maxWidth: 880,
+    margin: '0 auto',
+    position: 'relative',
+    zIndex: 1,
+  },
+
+  // --- Header ---
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 20,
+    borderBottom: '1px solid #2a2418',
+    marginBottom: 24,
+  },
+  headerLeft: { display: 'flex', alignItems: 'center', gap: 14 },
+  runeMark: {
+    fontSize: 28,
+    color: '#d4a24c',
+    textShadow: '0 0 18px rgba(212, 162, 76, 0.5)',
+  },
+  titleSmall: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 18,
+    letterSpacing: '0.25em',
+    color: '#e8d4a8',
+    fontWeight: 600,
+  },
+  subtitle: {
+    fontSize: 10,
+    letterSpacing: '0.3em',
+    color: '#7a7265',
+    marginTop: 3,
+    textTransform: 'uppercase',
+  },
+  stageIndicator: { display: 'flex', gap: 8 },
+  stageDot: { width: 8, height: 8, borderRadius: '50%', transition: 'background 0.3s' },
+
+  // --- Combatant panels (player + enemy) ---
+  combatants: {
+    display: 'grid',
+    gridTemplateColumns: '1fr auto 1fr',
+    gap: 20,
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  combatant: { display: 'flex', flexDirection: 'column', gap: 10 },
+  combatantLabel: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 12,
+    letterSpacing: '0.2em',
+    color: '#b8a88a',
+    fontWeight: 600,
+  },
+
+  // --- Stat bars (HP / MP / Shield) ---
+  statBar: { display: 'flex', alignItems: 'center', gap: 10 },
+  statLabel: {
+    fontSize: 10,
+    color: '#7a7265',
+    letterSpacing: '0.15em',
+    width: 22,
+  },
+  barTrack: {
+    flex: 1,
+    height: 18,
+    background: '#0f0c08',
+    border: '1px solid #2a2418',
+    position: 'relative',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    transition: 'width 0.4s ease',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
+  },
+  barText: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#f2e6d0',
+    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+    letterSpacing: '0.05em',
+  },
+
+  // --- Enemy telegraph banner ---
+  telegraph: {
+    fontSize: 12,
+    color: '#d4a24c',
+    textAlign: 'right',
+    letterSpacing: '0.05em',
+    padding: '6px 10px',
+    background: 'rgba(212, 162, 76, 0.06)',
+    border: '1px solid rgba(212, 162, 76, 0.2)',
+    borderRadius: 2,
+  },
+  telegraphIcon: { marginRight: 4 },
+
+  // --- Versus divider ---
+  versus: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
+    height: '100%',
+    justifyContent: 'center',
+  },
+  versusLine: { width: 1, height: 24, background: '#3a342a' },
+  versusMark: { fontSize: 16, color: '#d4a24c' },
+
+  // --- Draft area (tile row + controls) ---
+  draftArea: {
+    background: 'linear-gradient(180deg, rgba(26, 22, 18, 0.6) 0%, rgba(13, 10, 8, 0.6) 100%)',
+    border: '1px solid #2a2418',
+    padding: 20,
+    marginBottom: 20,
+    borderRadius: 2,
+  },
+  roundHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  roundLabel: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 13,
+    letterSpacing: '0.25em',
+    color: '#d4a24c',
+    fontWeight: 600,
+  },
+  hint: {
+    fontSize: 10,
+    color: '#7a7265',
+    letterSpacing: '0.2em',
+    textTransform: 'uppercase',
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 12,
+    marginBottom: 16,
+  },
+  tile: {
+    aspectRatio: '3 / 4',
+    border: '2px solid',
+    background: '#1a1612',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    fontFamily: '"Cinzel", serif',
+    position: 'relative',
+    animation: 'fadeIn 0.3s ease-out',
+    borderRadius: 2,
+  },
+  tileGlyph: { fontSize: 42, lineHeight: 1 },
+  tileLabel: {
+    fontSize: 10,
+    letterSpacing: '0.2em',
+    opacity: 0.85,
+    fontWeight: 600,
+  },
+
+  // --- Reroll / discard / submit controls ---
+  controls: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 10,
+  },
+  // 3-column layout when submit button is present
+  controls3: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: 10,
+  },
+  controlBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: '10px 14px',
+    background: '#14110e',
+    border: '1px solid #3a342a',
+    color: '#b8a88a',
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 11,
+    letterSpacing: '0.15em',
+    fontWeight: 500,
+    borderRadius: 2,
+  },
+  controlBtnDisabled: { opacity: 0.35, cursor: 'not-allowed' },
+  // Submit button — green glow when the committed sequence is valid
+  submitBtnValid: {
+    background: 'linear-gradient(165deg, #1a2e1a 0%, #102a10 100%)',
+    borderColor: '#3aa644',
+    color: '#8ad88a',
+  },
+  // Submit button — red tint when the committed sequence is invalid
+  submitBtnInvalid: {
+    background: 'linear-gradient(165deg, #2e1a1a 0%, #2a1010 100%)',
+    borderColor: '#a64432',
+    color: '#d88a8a',
+  },
+  ctrlIcon: { fontSize: 14 },
+  ctrlCost: {
+    fontSize: 10,
+    color: '#4a8bc2',
+    marginLeft: 4,
+    letterSpacing: '0.1em',
+  },
+
+  // --- Committed tile sequence ---
+  committedArea: { marginBottom: 20 },
+  committedHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  committedLabel: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 12,
+    letterSpacing: '0.25em',
+    color: '#8a8070',
+    fontWeight: 600,
+  },
+  previewStats: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 },
+  previewDmg: { color: '#e8a890', fontWeight: 600 },
+  previewBlk: { color: '#8ab4d8', fontWeight: 600 },
+  previewSep: { color: '#3a342a' },
+  committedRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: 10,
+    marginBottom: 10,
+  },
+  committedSlot: {
+    aspectRatio: '3 / 2',
+    border: '2px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 28,
+    fontFamily: '"Cinzel", serif',
+    borderRadius: 2,
+  },
+  committedEmpty: {
+    background: '#0d0a08',
+    borderColor: '#1f1c16',
+    borderStyle: 'dashed',
+    color: '#3a342a',
+  },
+  slotNum: { fontSize: 14, color: '#3a342a' },
+  segmentBreakdown: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+    minHeight: 24,
+  },
+  segChip: {
+    fontSize: 10,
+    padding: '4px 10px',
+    background: '#1a1612',
+    border: '1px solid #2a2418',
+    color: '#b8a88a',
+    letterSpacing: '0.1em',
+    borderRadius: 2,
+  },
+  breakdownEmpty: {
+    fontSize: 10,
+    color: '#3a342a',
+    fontStyle: 'italic',
+    letterSpacing: '0.1em',
+  },
+
+  // --- Battle log ---
+  logSection: {
+    background: '#0a0806',
+    border: '1px solid #2a2418',
+    padding: '14px 18px',
+    borderRadius: 2,
+  },
+  logHeader: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 11,
+    letterSpacing: '0.25em',
+    color: '#8a8070',
+    fontWeight: 600,
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottom: '1px solid #2a2418',
+  },
+  logBody: {
+    maxHeight: 120,
+    overflowY: 'auto',
+    fontSize: 11,
+    lineHeight: 1.6,
+    color: '#a89c88',
+  },
+  logEntry: {
+    paddingLeft: 10,
+    borderLeft: '2px solid #2a2418',
+    marginBottom: 3,
+  },
+
+  // --- Victory / defeat overlay ---
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(5, 3, 2, 0.88)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 50,
+    backdropFilter: 'blur(8px)',
+    animation: 'fadeIn 0.4s ease',
+  },
+  overlayContent: {
+    textAlign: 'center',
+    padding: '40px 50px',
+    background: 'linear-gradient(180deg, #1a1612 0%, #0a0806 100%)',
+    border: '1px solid #3a342a',
+    maxWidth: 360,
+    borderRadius: 2,
+  },
+  overlayMark: { fontSize: 44, color: '#d4a24c', marginBottom: 12 },
+  overlayTitle: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 28,
+    letterSpacing: '0.35em',
+    color: '#e8d4a8',
+    fontWeight: 700,
+    marginBottom: 10,
+  },
+  overlaySubtitle: {
+    fontSize: 12,
+    color: '#8a8070',
+    letterSpacing: '0.15em',
+    marginBottom: 28,
+    textTransform: 'uppercase',
+  },
+  overlayButtons: { display: 'flex', gap: 10, justifyContent: 'center' },
+  overlayBtn: {
+    padding: '12px 22px',
+    background: '#14110e',
+    border: '1px solid #3a342a',
+    color: '#b8a88a',
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 11,
+    letterSpacing: '0.2em',
+    fontWeight: 600,
+    borderRadius: 2,
+  },
+  overlayBtnPrimary: {
+    background: 'linear-gradient(180deg, #d4a24c 0%, #a67c2a 100%)',
+    color: '#1a1612',
+    borderColor: '#d4a24c',
+  },
+};
