@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-24
+
 ### Changed
 - Rebalanced hero core stats to 220 HP, 100 Mana, and 80 Shield cap.
 - Updated kill rewards to grant +25 MP and +20 HP (capped to max values).
