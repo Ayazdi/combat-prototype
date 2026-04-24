@@ -47,6 +47,7 @@ export default function useCombat() {
   const [incomingDamage, setIncomingDamage] = useState(0);
   const [enemyTelegraph, setEnemyTelegraph] = useState('');
   const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
+  const [combatBanner, setCombatBanner] = useState(null);
   const [victoryReward, setVictoryReward] = useState(null);
   const [selectedPerkKey, setSelectedPerkKey] = useState(null);
 
@@ -63,6 +64,17 @@ export default function useCombat() {
 
   /** Append a line to the battle log */
   const addLog = (entry) => setLog((l) => [...l, entry]);
+
+  const showCombatBanner = (banner) => {
+    setCombatBanner({ ...banner, id: Date.now() });
+  };
+
+  const formatPlayerAction = (damage, block) => {
+    if (damage > 0 && block > 0) return `Player attacked ${damage} and shielded ${block}`;
+    if (damage > 0) return `Player attacked ${damage}`;
+    if (block > 0) return `Player shielded ${block}`;
+    return 'Player took no action';
+  };
 
   /** Return the deck composition for this battle, adjusted for the enemy passive. */
   const getBattleDeckComposition = () => {
@@ -208,6 +220,7 @@ export default function useCombat() {
 
     setIncomingDamage(incoming);
     setEnemyTelegraph('');
+    setCombatBanner(null);
     setCommitted([]);
     setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setSelectedCommittedIndex(null);
@@ -475,102 +488,145 @@ export default function useCombat() {
       })
       .join(' ');
 
-    // --- Shield gain (capped at max) ---
-    const shieldBefore = playerShield;
-    const shieldRaw = shieldBefore + block;
-    const shieldAfterGain = Math.min(TUNING.player.maxShield, shieldRaw);
-    const shieldWasted = shieldRaw - shieldAfterGain;
+    showCombatBanner({
+      eyebrow: 'Player Turn',
+      title: 'Your move',
+      detail: 'Resolving committed sequence',
+      tone: 'player',
+    });
 
-    const logParts = [`T${turn}: ${seqStr} → ${damage} dmg`];
-    if (block > 0) {
-      if (shieldWasted > 0) {
-        logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${TUNING.player.maxShield})`);
-      } else {
-        logParts.push(`+${block} shield`);
-      }
-    }
-    addLog(logParts.join(' / '));
-
-    // --- Apply player damage to enemy (enemy shield absorbs first) ---
-    const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
-    const effectiveDamage = Math.max(0, damage - armoredReduction);
-    if (armoredReduction > 0) {
-      addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
-    }
-    const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
-    const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
-    const dealtToHp = effectiveDamage - enemyAbsorbed;
-    const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
-    if (enemyAbsorbed > 0) {
-      addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
-    }
-    setEnemyShield(enemyShieldAfterHit);
-    setEnemyHp(newEnemyHp);
-
-    if (newEnemyHp <= 0) {
-      const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
-      const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
-      setPlayerShield(shieldAfterGain);
-      setPlayerMana(manaAfterFoe);
-      setPlayerHp(hpAfterFoe);
-      setVictoryReward({
-        baseManaGain: TUNING.player.manaRegenPerFoe,
-        baseHpGain: TUNING.player.hpRegenPerFoe,
-        manaAfter: manaAfterFoe,
-        hpAfter: hpAfterFoe,
-        perks: buildPerkOptions(enemyIdx),
-      });
-      setSelectedPerkKey(null);
-      addLog(`✦ ${enemy.name} defeated`);
-      addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
-      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
-      setPhase('victory');
-      return;
-    }
-
-    // --- Enemy executes current intent (attack or defend) ---
-    const currentIntent = enemyIntentQueue[0] || { type: 'attack', amount: incomingDamage };
-    let shieldAfterEnemyAction = enemyShieldAfterHit;
-    let newPlayerHp = playerHp;
-
-    if (currentIntent.type === 'defend') {
-      shieldAfterEnemyAction += currentIntent.amount;
-      setEnemyShield(shieldAfterEnemyAction);
-      addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
-    } else {
-      const rawDmg = currentIntent.amount;
-      const absorbed = Math.min(shieldAfterGain, rawDmg);
-      const shieldAfterHit = shieldAfterGain - absorbed;
-      const taken = rawDmg - absorbed;
-      newPlayerHp = Math.max(0, playerHp - taken);
-
-      if (absorbed > 0) {
-        addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
-      } else {
-        addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
-      }
-      setPlayerShield(shieldAfterHit);
-    }
-
-    if (currentIntent.type === 'defend') {
-      setPlayerShield(shieldAfterGain);
-    }
-    setPlayerHp(newPlayerHp);
-
-    if (newPlayerHp <= 0) {
-      addLog('✖ You fell in battle');
-      setPhase('defeat');
-      return;
-    }
-
-    // Advance to the next turn after a brief pause
     setTimeout(() => {
-      const nextTurn = turn + 1;
-      const nextQueue = buildIntentQueue(nextTurn, enemyIntentQueue.slice(1));
-      setEnemyIntentQueue(nextQueue);
-      setTurn(nextTurn);
-      startTurn(nextTurn, nextQueue);
-    }, 1200);
+      // --- Shield gain (capped at max) ---
+      const shieldBefore = playerShield;
+      const shieldRaw = shieldBefore + block;
+      const shieldAfterGain = Math.min(TUNING.player.maxShield, shieldRaw);
+      const shieldWasted = shieldRaw - shieldAfterGain;
+
+      const logParts = [`T${turn}: ${seqStr} → ${damage} dmg`];
+      if (block > 0) {
+        if (shieldWasted > 0) {
+          logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${TUNING.player.maxShield})`);
+        } else {
+          logParts.push(`+${block} shield`);
+        }
+      }
+      addLog(logParts.join(' / '));
+      showCombatBanner({
+        eyebrow: 'Player Action',
+        title: formatPlayerAction(damage, block),
+        detail: seqStr || 'No combo resolved',
+        tone: 'player',
+      });
+
+      // --- Apply player damage to enemy (enemy shield absorbs first) ---
+      const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
+      const effectiveDamage = Math.max(0, damage - armoredReduction);
+      if (armoredReduction > 0) {
+        addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
+      }
+      const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
+      const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
+      const dealtToHp = effectiveDamage - enemyAbsorbed;
+      const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
+      if (enemyAbsorbed > 0) {
+        addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
+      }
+      setPlayerShield(shieldAfterGain);
+      setEnemyShield(enemyShieldAfterHit);
+      setEnemyHp(newEnemyHp);
+
+      if (newEnemyHp <= 0) {
+        setTimeout(() => {
+          const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
+          const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
+          setPlayerMana(manaAfterFoe);
+          setPlayerHp(hpAfterFoe);
+          setVictoryReward({
+            baseManaGain: TUNING.player.manaRegenPerFoe,
+            baseHpGain: TUNING.player.hpRegenPerFoe,
+            manaAfter: manaAfterFoe,
+            hpAfter: hpAfterFoe,
+            perks: buildPerkOptions(enemyIdx),
+          });
+          setSelectedPerkKey(null);
+          setCombatBanner(null);
+          addLog(`✦ ${enemy.name} defeated`);
+          addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
+          addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
+          setPhase('victory');
+        }, 1300);
+        return;
+      }
+
+      // --- Enemy executes current intent (attack or defend) ---
+      const currentIntent = enemyIntentQueue[0] || { type: 'attack', amount: incomingDamage };
+
+      setTimeout(() => {
+        showCombatBanner({
+          eyebrow: 'Enemy Turn',
+          title: `${enemy.name} prepares`,
+          detail: currentIntent.text,
+          tone: 'enemy',
+        });
+      }, 1000);
+
+      setTimeout(() => {
+        let shieldAfterEnemyAction = enemyShieldAfterHit;
+        let newPlayerHp = playerHp;
+
+        if (currentIntent.type === 'defend') {
+          shieldAfterEnemyAction += currentIntent.amount;
+          setEnemyShield(shieldAfterEnemyAction);
+          setPlayerShield(shieldAfterGain);
+          addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
+          showCombatBanner({
+            eyebrow: 'Enemy Action',
+            title: `${enemy.name} shielded ${currentIntent.amount}`,
+            detail: `Enemy shield ${shieldAfterEnemyAction}`,
+            tone: 'enemy',
+          });
+        } else {
+          const rawDmg = currentIntent.amount;
+          const absorbed = Math.min(shieldAfterGain, rawDmg);
+          const shieldAfterHit = shieldAfterGain - absorbed;
+          const taken = rawDmg - absorbed;
+          newPlayerHp = Math.max(0, playerHp - taken);
+
+          if (absorbed > 0) {
+            addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+          } else {
+            addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
+          }
+          setPlayerShield(shieldAfterHit);
+          showCombatBanner({
+            eyebrow: 'Enemy Action',
+            title: `${enemy.name} attacked ${rawDmg}`,
+            detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
+            tone: 'enemy',
+          });
+        }
+
+        setPlayerHp(newPlayerHp);
+
+        if (newPlayerHp <= 0) {
+          setTimeout(() => {
+            setCombatBanner(null);
+            addLog('✖ You fell in battle');
+            setPhase('defeat');
+          }, 1200);
+          return;
+        }
+
+        // Advance to the next turn after the outcome banner has had time to land.
+        setTimeout(() => {
+          const nextTurn = turn + 1;
+          const nextQueue = buildIntentQueue(nextTurn, enemyIntentQueue.slice(1));
+          setEnemyIntentQueue(nextQueue);
+          setTurn(nextTurn);
+          startTurn(nextTurn, nextQueue);
+        }, 1400);
+      }, 2200);
+    }, 1000);
   };
 
   // ----------------------------------------------------------
@@ -697,6 +753,7 @@ export default function useCombat() {
       discardCost,
       sequenceValid,
       sequenceFull,
+      combatBanner,
       victoryReward,
       selectedPerkKey,
       logEndRef,

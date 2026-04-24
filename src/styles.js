@@ -66,6 +66,9 @@ export const globalCss = `
     animation: handLandIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1.1);
     transform-origin: 50% 100%;
   }
+  .combat-banner {
+    animation: combatBannerIn 0.28s ease-out, combatBannerPulse 1.15s ease-in-out 0.28s infinite alternate;
+  }
 
   /* Victory / defeat overlay buttons */
   .overlay-btn {
@@ -118,6 +121,22 @@ export const globalCss = `
       transform: translateY(0) scale(1) rotate(0deg);
       filter: brightness(1);
     }
+  }
+  @keyframes combatBannerIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -44%) scale(0.92);
+      filter: blur(2px) brightness(1.4);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      filter: blur(0) brightness(1);
+    }
+  }
+  @keyframes combatBannerPulse {
+    from { box-shadow: 0 18px 55px rgba(0,0,0,0.65), 0 0 20px rgba(212,162,76,0.18); }
+    to { box-shadow: 0 22px 70px rgba(0,0,0,0.78), 0 0 34px rgba(212,162,76,0.34); }
   }
   @keyframes dragPulse {
     from { transform: scale(0.96); filter: brightness(0.95); }
@@ -530,6 +549,54 @@ export const styles = {
     paddingLeft: 10,
     borderLeft: '2px solid #2a2418',
     marginBottom: 3,
+  },
+
+  // --- Combat action banner ---
+  combatBanner: {
+    position: 'fixed',
+    left: '50%',
+    top: '48%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 45,
+    width: 'min(560px, calc(100vw - 32px))',
+    padding: '24px 28px',
+    border: '1px solid',
+    borderRadius: 2,
+    textAlign: 'center',
+    pointerEvents: 'none',
+    backdropFilter: 'blur(6px)',
+  },
+  combatBannerPlayer: {
+    background: 'linear-gradient(180deg, rgba(28, 24, 18, 0.96) 0%, rgba(12, 10, 8, 0.94) 100%)',
+    borderColor: 'rgba(212, 162, 76, 0.75)',
+    color: '#e8d4a8',
+  },
+  combatBannerEnemy: {
+    background: 'linear-gradient(180deg, rgba(38, 18, 16, 0.96) 0%, rgba(13, 8, 8, 0.94) 100%)',
+    borderColor: 'rgba(198, 72, 56, 0.75)',
+    color: '#e8a890',
+  },
+  combatBannerEyebrow: {
+    fontSize: 11,
+    letterSpacing: '0.32em',
+    textTransform: 'uppercase',
+    color: '#8a8070',
+    marginBottom: 10,
+    fontWeight: 600,
+  },
+  combatBannerTitle: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 25,
+    letterSpacing: '0.08em',
+    fontWeight: 700,
+    lineHeight: 1.2,
+  },
+  combatBannerDetail: {
+    marginTop: 10,
+    fontSize: 12,
+    letterSpacing: '0.08em',
+    color: '#c9b28a',
+    lineHeight: 1.45,
   },
 
   // --- Victory / defeat overlay ---

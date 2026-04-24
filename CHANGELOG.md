@@ -8,6 +8,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Added
 - Added card entry animations for board refills and committed hand slots.
+- Added epic combat banners for turn starts, player outcomes, and enemy outcomes.
 
 ### Changed
 - Updated No Action cards with a heavier cement-block visual treatment.
