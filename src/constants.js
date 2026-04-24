@@ -7,7 +7,7 @@ export const TUNING = {
     maxMana: 100,
     maxShield: 80,
     manaRegenPerFoe: 25,
-    hpRegenPerFoe: 20,
+    hpRegenPerFoe: 30,
     startingMana: 100,
   },
   tiles: {

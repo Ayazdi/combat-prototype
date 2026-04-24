@@ -6,6 +6,9 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Changed
+- Increased the HP reward after defeating an enemy from +20 HP to +30 HP.
+
 ## [0.1.2] - 2026-04-24
 
 ### Added

@@ -14,7 +14,7 @@ A turn-based card-draft combat game. Each turn, the player picks tiles into a 5-
 | Max Mana | 100 |
 | Shield Cap | 80 |
 | Starting Mana | 100 |
-| Kill Reward | +25 Mana, +20 HP |
+| Kill Reward | +25 Mana, +30 HP |
 
 Kill rewards are clamped to max HP and max Mana.
 
