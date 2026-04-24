@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-04-24
+
 ### Added
 - Added post-kill perk selection with configurable damage, defence, mana, and HP reward options.
 
