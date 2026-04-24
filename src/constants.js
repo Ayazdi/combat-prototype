@@ -20,9 +20,9 @@ export const TUNING = {
   },
   tiles: {
     attackBase: 30,
-    defenceBase: 15,
+    defenceBase: 20,
     attackCombos: { 2: 1.4, 3: 1.8, 4: 2.3, 5: 3.0 },
-    defenceCombos: { 2: 1.4, 3: 1.8, 4: 2.3, 5: 2.5 },
+    defenceCombos: { 2: 1.4, 3: 1.8, 4: 2.3, 5: 3.0 },
   },
   draft: {
     rowSize: 8,
