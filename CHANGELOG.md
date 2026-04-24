@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-24
+
 ### Added
 - Added board-card discard controls that spend MP to permanently remove a visible board tile and draw a replacement.
 
