@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+- Added board-card discard controls that spend MP to permanently remove a visible board tile and draw a replacement.
+
+### Changed
+- Changed discard so discarded cards do not return to the deck.
+- Removed the per-turn discard limit; discard use is now limited only by available MP.
+
 ## [0.1.1] - 2026-04-24
 
 ### Changed

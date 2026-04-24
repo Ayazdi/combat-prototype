@@ -19,6 +19,18 @@ export const globalCss = `
     cursor: not-allowed;
     opacity: 0.55;
   }
+  .tile-discard-btn {
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  }
+  .tile-discard-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    background: #3a1d1d !important;
+    border-color: #e8a890 !important;
+  }
+  .tile-discard-btn:disabled {
+    cursor: not-allowed;
+  }
 
   /* Reroll / discard button hover glow */
   .ctrl-btn {
@@ -257,7 +269,12 @@ export const styles = {
     gap: 12,
     marginBottom: 16,
   },
+  tileWrap: {
+    position: 'relative',
+    minWidth: 0,
+  },
   tile: {
+    width: '100%',
     aspectRatio: '3 / 4',
     border: '2px solid',
     background: '#1a1612',
@@ -277,6 +294,28 @@ export const styles = {
     letterSpacing: '0.2em',
     opacity: 0.85,
     fontWeight: 600,
+  },
+  boardDiscardBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 2,
+    border: '1px solid rgba(232, 168, 144, 0.65)',
+    background: 'rgba(46, 26, 26, 0.9)',
+    color: '#e8a890',
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 14,
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+  },
+  boardDiscardBtnDisabled: {
+    opacity: 0.35,
+    cursor: 'not-allowed',
   },
   deckInfo: {
     display: 'flex',

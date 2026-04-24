@@ -8,7 +8,7 @@ import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, fi
 //
 // Return value:
 //   state   – all reactive values the UI reads
-//   actions – { pickTile, selectCommittedTile, reroll, discardSelected, nextEnemy, restart }
+//   actions – { pickTile, selectCommittedTile, reroll, discardSelected, discardBoardTile, nextEnemy, restart }
 // ============================================================
 export default function useCombat() {
   // --- Core player / enemy state ---
@@ -28,7 +28,6 @@ export default function useCombat() {
   const [pickLimit, setPickLimit] = useState(TUNING.draft.maxSequence);
   const [currentRow, setCurrentRow] = useState([]);
   const [rerollsUsedEnemy, setRerollsUsedEnemy] = useState(0);
-  const [discardsUsedTurn, setDiscardsUsedTurn] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
   const [deckShuffleCount, setDeckShuffleCount] = useState(1);
@@ -160,7 +159,6 @@ export default function useCombat() {
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
-    setDiscardsUsedTurn(0);
     if (turnNum === 1) setRerollsUsedEnemy(0);
     setRound(1);
     setPhase('drafting');
@@ -294,12 +292,11 @@ export default function useCombat() {
   };
 
   /**
-   * Spend mana to discard one selected committed tile.
+   * Spend mana to permanently discard one selected committed tile.
    * Discard grants +1 extra selection budget this turn.
    */
   const discardSelected = () => {
     if (committed.length === 0) return;
-    if (discardsUsedTurn >= TUNING.draft.maxDiscardsPerTurn) return;
     const discardIndex =
       selectedCommittedIndex !== null && selectedCommittedIndex >= 0 && selectedCommittedIndex < committed.length
         ? selectedCommittedIndex
@@ -312,8 +309,6 @@ export default function useCombat() {
 
     setPlayerMana((m) => m - cost);
 
-    // Put the discarded card back into the deck.
-    setDeck((d) => [discardedCard, ...d]);
     setCommitted((c) => {
       const next = [...c];
       // Discarded card leaves an empty slot, not a new slot.
@@ -323,8 +318,34 @@ export default function useCombat() {
 
     // Discard allows one additional pick this turn.
     setPickLimit((limit) => limit + 1);
-    setDiscardsUsedTurn((v) => v + 1);
     setSelectedCommittedIndex(null);
+    if (enemy.ability === 'adaptive') {
+      setEnemyShield((s) => s + 25);
+      addLog(`  ${enemy.name} adapts: +25 shield (discard)`);
+    }
+  };
+
+  /** Spend mana to permanently discard one visible board card. */
+  const discardBoardTile = (index) => {
+    if (phase !== 'drafting') return;
+    if (index < 0 || index >= currentRow.length) return;
+    if (currentRow[index] === undefined || currentRow[index] === null) return;
+
+    const cost = getDiscardCost();
+    if (playerMana < cost) return;
+
+    setPlayerMana((m) => m - cost);
+
+    const composition = getBattleDeckComposition();
+    const { card: replacementCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
+    setDeck(updatedDeck);
+    if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    setCurrentRow((row) => {
+      const next = [...row];
+      next[index] = replacementCard;
+      return next;
+    });
+
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
       addLog(`  ${enemy.name} adapts: +25 shield (discard)`);
@@ -493,7 +514,6 @@ export default function useCombat() {
     setTurn(1);
     setLog([]);
     setRerollsUsedEnemy(0);
-    setDiscardsUsedTurn(0);
     setSelectedCommittedIndex(null);
     // Rebuild the deck and pool for this fight.
     const [newDeck, initialPool] = buildBattleDeck();
@@ -512,7 +532,6 @@ export default function useCombat() {
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = picksUsed >= pickLimit;
   const rerollsLeftEnemy = Math.max(0, TUNING.draft.maxRerollsPerEnemy - rerollsUsedEnemy);
-  const discardsLeftTurn = Math.max(0, TUNING.draft.maxDiscardsPerTurn - discardsUsedTurn);
   const deckCounts = deck.reduce((acc, card) => {
     acc[card] = (acc[card] || 0) + 1;
     return acc;
@@ -539,13 +558,11 @@ export default function useCombat() {
       handSlotCount,
       currentRow,
       rerollsUsedEnemy,
-      discardsUsedTurn,
       deckSize: deck.length,
       deckCounts,
       deckShuffleCount,
       deckIsShuffled: true,
       rerollsLeftEnemy,
-      discardsLeftTurn,
       log,
       phase,
       incomingDamage,
@@ -563,6 +580,7 @@ export default function useCombat() {
       moveCommittedTile,
       reroll,
       discardSelected,
+      discardBoardTile,
       submitSequence,
       nextEnemy,
       restart,
