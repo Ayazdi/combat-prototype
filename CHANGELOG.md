@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- Rebalanced hero core stats to 220 HP, 100 Mana, and 80 Shield cap.
+- Updated kill rewards to grant +25 MP and +20 HP (capped to max values).
+- Rebalanced deck composition per fight to 12 Attack, 10 Defence, and 18 No Action.
+- Rebalanced action base values and combo multipliers.
+- Changed reroll rule to 1 use per enemy (still 25 MP).
+- Changed discard rule to 1 use per turn (25 MP baseline, tile returns to deck).
+- Replaced formula defend scaling with explicit per-enemy defend values.
+- Updated enemy roster stats and passives: Armored, Adaptive, and revised Charged Strike/Empty Plus/Double Discard behavior.
+
+### Added
+- Added per-turn discard limit tracking in combat flow.
+- Added per-enemy reroll limit tracking in combat flow.
+
 ## [0.1.0] - 2026-04-23
 
 ### Added

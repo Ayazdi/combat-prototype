@@ -1,4 +1,3 @@
-import React from 'react';
 import useCombat from './useCombat';
 import { styles, globalCss } from './styles';
 
@@ -45,11 +44,10 @@ export default function DraftCombat() {
 
         {/* Tile draft row + reroll / discard / submit controls */}
         <DraftArea
-          round={state.round}
           phase={state.phase}
           currentRow={state.currentRow}
-          rerollLocked={state.rerollLocked}
-          rerollsLeftRun={state.rerollsLeftRun}
+          rerollsLeftEnemy={state.rerollsLeftEnemy}
+          discardsLeftTurn={state.discardsLeftTurn}
           playerMana={state.playerMana}
           discardCost={state.discardCost}
           deckSize={state.deckSize}

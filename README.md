@@ -1,16 +1,45 @@
-# React + Vite
+# Combat Prototype
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React and Vite combat prototype.
 
-Currently, two official plugins are available:
+## How to run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Install dependencies:
 
-## React Compiler
+```sh
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Start the development server:
 
-## Expanding the ESLint configuration
+```sh
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+On Windows PowerShell, if you see an error that `npm.ps1 cannot be loaded because running scripts is disabled`, use the Windows command shim instead:
+
+```sh
+npm.cmd run dev
+```
+
+Vite will print a local URL, usually `http://localhost:5173/`, that you can open in a browser.
+
+## Other commands
+
+Build for production:
+
+```sh
+npm run build
+```
+
+Preview the production build:
+
+```sh
+npm run preview
+```
+
+Run linting:
+
+```sh
+npm run lint
+```

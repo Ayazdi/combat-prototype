@@ -3,36 +3,35 @@
 // ============================================================
 export const TUNING = {
   player: {
-    maxHp: 250,
+    maxHp: 220,
     maxMana: 100,
-    maxShield: 50,
-    manaRegenPerFoe: 20,
+    maxShield: 80,
+    manaRegenPerFoe: 25,
+    hpRegenPerFoe: 20,
     startingMana: 100,
   },
   tiles: {
-    attackBase: 25,
-    defenceBase: 20,
-    attackCombos: { 2: 1.25, 3: 1.5, 4: 1.75, 5: 3.0 },
-    defenceCombos: { 2: 1.25, 3: 2, 4: 3, 5: 4 },
+    attackBase: 30,
+    defenceBase: 15,
+    attackCombos: { 2: 1.4, 3: 1.8, 4: 2.3, 5: 3.0 },
+    defenceCombos: { 2: 1.4, 3: 1.8, 4: 2.3, 5: 2.5 },
   },
   draft: {
     rowSize: 8,
     // Base number of selections allowed each turn.
     maxSequence: 5,
-    // Total rerolls available across the whole run (enemy 1 -> final enemy).
-    maxRerollsPerRun: 2,
+    // Action limits.
+    maxRerollsPerEnemy: 1,
+    maxDiscardsPerTurn: 1,
     rerollCost: 25,
     discardCost: 25,
   },
   // Deck composition per battle — shuffled fresh when a new enemy fight begins.
   // Total cards = sum of all values. Tune these to adjust tile frequency.
-  deckComposition: { A: 10, D: 8, E: 22 }, // 40 cards per battle
+  deckComposition: { A: 12, D: 10, E: 18 }, // 40 cards per battle
   enemyAI: {
     // Weighted random enemy intent: 2 attacks for each 1 defend on average.
     intentWeights: { attack: 2, defend: 1 },
-    // Level 1 defend amount starts at 10 and scales by enemy level.
-    defendBaseShield: 10,
-    defendShieldPerLevel: 5,
   },
   // Accepted combos. Submit can contain extra tiles/empties; the best
   // available combo from this list is what gets resolved.
@@ -47,11 +46,11 @@ export const TUNING = {
     E: 50,
   },
   enemies: [
-    { id: 1, name: 'Slime', hp: 140, attack: 25, ability: null },
-    { id: 2, name: 'Goblin', hp: 260, attack: 30, ability: 'charged_strike' },
-    { id: 3, name: 'Mage', hp: 220, attack: 28, ability: 'empty_plus' },
-    { id: 4, name: 'Knight', hp: 340, attack: 38, ability: 'no_first_defence' },
-    { id: 5, name: 'Warden', hp: 300, attack: 42, ability: 'reroll_lock' },
-    { id: 6, name: 'Witch', hp: 260, attack: 35, ability: 'double_discard' },
+    { id: 1, name: 'Slime', hp: 140, attack: 22, defend: 10, ability: null },
+    { id: 2, name: 'Goblin', hp: 220, attack: 28, defend: 15, ability: 'charged_strike' },
+    { id: 3, name: 'Mage', hp: 230, attack: 30, defend: 20, ability: 'empty_plus' },
+    { id: 4, name: 'Knight', hp: 320, attack: 35, defend: 25, ability: 'armored' },
+    { id: 5, name: 'Warden', hp: 280, attack: 38, defend: 30, ability: 'adaptive' },
+    { id: 6, name: 'Witch', hp: 260, attack: 42, defend: 35, ability: 'double_discard' },
   ],
 };

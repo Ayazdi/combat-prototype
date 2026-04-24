@@ -1,4 +1,3 @@
-import React from 'react';
 import { TUNING } from '../constants';
 import { styles } from '../styles';
 import { tileGlyph, tileLabel, tileStyle } from '../tileHelpers';
@@ -15,11 +14,10 @@ import { tileGlyph, tileLabel, tileStyle } from '../tileHelpers';
 // hits SUBMIT. Only accepted pure sequences (AA, DDD, …) pass.
 // ============================================================
 export default function DraftArea({
-  round,
   phase,
   currentRow,
-  rerollLocked,
-  rerollsLeftRun,
+  rerollsLeftEnemy,
+  discardsLeftTurn,
   playerMana,
   discardCost,
   deckSize,
@@ -38,12 +36,13 @@ export default function DraftArea({
   onSubmit,
 }) {
   const rerollDisabled =
-    phase !== 'drafting' || rerollLocked || rerollsLeftRun <= 0 || playerMana < TUNING.draft.rerollCost;
+    phase !== 'drafting' || rerollsLeftEnemy <= 0 || playerMana < TUNING.draft.rerollCost;
 
   const discardDisabled =
     phase !== 'drafting' ||
     committedLength === 0 ||
     selectedCommittedIndex === null ||
+    discardsLeftTurn <= 0 ||
     playerMana < discardCost;
 
   // Can't pick more tiles once we hit the max
@@ -63,7 +62,7 @@ export default function DraftArea({
           {phase === 'drafting'
             ? sequenceFull
               ? 'max reached — submit or discard'
-              : `choose one tile • rerolls left: ${rerollsLeftRun}`
+              : `choose one tile • rerolls left this enemy: ${rerollsLeftEnemy}`
             : phase === 'resolving'
               ? 'resolving…'
               : ''}
@@ -109,7 +108,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>↻</span>
           <span>REROLL</span>
-          <span style={styles.ctrlCost}>{TUNING.draft.rerollCost} MP • {rerollsLeftRun} LEFT</span>
+          <span style={styles.ctrlCost}>{TUNING.draft.rerollCost} MP • {rerollsLeftEnemy} LEFT (ENEMY)</span>
         </button>
 
         <button
@@ -123,7 +122,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>✕</span>
           <span>DISCARD SELECTED</span>
-          <span style={styles.ctrlCost}>{discardCost} MP</span>
+          <span style={styles.ctrlCost}>{discardCost} MP • {discardsLeftTurn} LEFT (TURN)</span>
         </button>
 
         {/* SUBMIT — highlighted green when the sequence is valid */}

@@ -94,11 +94,11 @@ export const isValidSequence = (committed) => {
 
 export const abilityDescription = (key) => {
   switch (key) {
-    case 'charged_strike': return 'Every 3rd turn → Charged Strike (60 dmg)';
-    case 'empty_plus': return 'Empty tiles appear more often';
-    case 'no_first_defence': return 'First draft row has no Defence tiles';
-    case 'reroll_lock': return 'Reroll locked on turns 3 & 6';
-    case 'double_discard': return 'Discard cost doubled';
+    case 'charged_strike': return 'Every 3rd attack is Charged Strike (50 dmg)';
+    case 'empty_plus': return 'Battle deck shifts +4 No Action tiles';
+    case 'armored': return 'Reduces incoming hit damage by 10';
+    case 'adaptive': return 'Gains +25 shield whenever you reroll or discard';
+    case 'double_discard': return 'Discard costs 50 MP';
     default: return '';
   }
 };
