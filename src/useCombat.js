@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
-import { buildShuffledDeck, drawFromDeck, computeResolution, abilityDescription, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
+import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -27,7 +27,8 @@ export default function useCombat() {
   const [picksUsed, setPicksUsed] = useState(0);
   const [pickLimit, setPickLimit] = useState(TUNING.draft.maxSequence);
   const [currentRow, setCurrentRow] = useState([]);
-  const [rerollsUsedRun, setRerollsUsedRun] = useState(0);
+  const [rerollsUsedEnemy, setRerollsUsedEnemy] = useState(0);
+  const [discardsUsedTurn, setDiscardsUsedTurn] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
   const [deckShuffleCount, setDeckShuffleCount] = useState(1);
@@ -39,7 +40,6 @@ export default function useCombat() {
   const [incomingDamage, setIncomingDamage] = useState(0);
   const [enemyTelegraph, setEnemyTelegraph] = useState('');
   const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
-  const [rerollLocked, setRerollLocked] = useState(false);
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
@@ -59,8 +59,10 @@ export default function useCombat() {
   const getBattleDeckComposition = () => {
     const base = { ...TUNING.deckComposition };
     if (enemy.ability === 'empty_plus') {
-      // Mage: heavier empty tile presence in the battle deck
-      base.E += 8; base.A = Math.max(1, base.A - 4); base.D = Math.max(1, base.D - 4);
+      // Mage: shift 4 cards into No Action while keeping the deck at 40 cards.
+      base.E += 4;
+      base.A = Math.max(1, base.A - 2);
+      base.D = Math.max(1, base.D - 2);
     }
     return base;
   };
@@ -68,7 +70,7 @@ export default function useCombat() {
   /**
    * Shuffle a fresh deck for this battle and draw the initial card pool.
    * Returns [remainingDeck, initialPool].
-   * Knight's no_first_defence swaps any D cards out of the initial pool.
+   * Builds initial 8-tile board from the shuffled deck.
    */
   const buildBattleDeck = () => {
     const composition = getBattleDeckComposition();
@@ -78,18 +80,6 @@ export default function useCombat() {
       const { card, deck: nextDeck } = drawFromDeck(workingDeck, composition);
       workingDeck = nextDeck;
       initialPool.push(card);
-    }
-    if (enemy.ability === 'no_first_defence') {
-      // Remove D tiles from initial pool for Knight
-      for (let i = 0; i < initialPool.length; i++) {
-        let attempts = 0;
-        while (initialPool[i] === 'D' && workingDeck.length > 0 && attempts < 30) {
-          const { card, deck: nextDeck } = drawFromDeck(workingDeck, composition);
-          workingDeck = nextDeck;
-          if (card !== 'D') { initialPool[i] = card; break; }
-          attempts++;
-        }
-      }
     }
     return [workingDeck, initialPool];
   };
@@ -101,9 +91,9 @@ export default function useCombat() {
       : TUNING.draft.discardCost;
   };
 
-  /** Enemy defend amount scales by enemy level (id). */
+  /** Enemy defend amount is explicit per enemy definition. */
   const getEnemyDefendShield = () => {
-    return TUNING.enemyAI.defendBaseShield + (enemy.id - 1) * TUNING.enemyAI.defendShieldPerLevel;
+    return enemy.defend || 0;
   };
 
   const refillEnemyIntentBag = () => {
@@ -127,26 +117,19 @@ export default function useCombat() {
   /** Build a weighted random enemy intent for a specific turn number. */
   const rollEnemyIntent = (turnNum) => {
     let type = drawEnemyIntentType();
-    let amount = 0;
-    let text = '';
 
     // Goblin charged-strike keeps priority on every 3rd turn.
     if (enemy.ability === 'charged_strike' && turnNum % 3 === 0) {
       type = 'attack';
-      amount = 60;
-      text = `ATTACK ${amount} (CHARGED)`;
-      return { type, amount, text };
+      return { type, amount: 50, text: 'ATTACK 50 (CHARGED)' };
     }
 
     if (type === 'attack') {
-      amount = enemy.attack;
-      text = `ATTACK ${amount}`;
-    } else {
-      amount = getEnemyDefendShield();
-      text = `SHIELD +${amount}`;
+      return { type, amount: enemy.attack, text: `ATTACK ${enemy.attack}` };
     }
 
-    return { type, amount, text };
+    const defendAmount = getEnemyDefendShield();
+    return { type, amount: defendAmount, text: `SHIELD +${defendAmount}` };
   };
 
   /** Ensure we always have exactly two upcoming intents in the queue. */
@@ -171,20 +154,14 @@ export default function useCombat() {
     const currentIntent = queue[0] || { type: 'attack', amount: enemy.attack, text: `ATTACK ${enemy.attack}` };
     const incoming = currentIntent.type === 'attack' ? currentIntent.amount : 0;
 
-    // Warden reroll-lock on turns 3 & 6
-    if (enemy.ability === 'reroll_lock' && (turnNum === 3 || turnNum === 6)) {
-      setRerollLocked(true);
-    } else {
-      setRerollLocked(false);
-    }
-
     setIncomingDamage(incoming);
-    const lockText = enemy.ability === 'reroll_lock' && (turnNum === 3 || turnNum === 6) ? ' • Reroll locked' : '';
-    setEnemyTelegraph(lockText ? `REROLL LOCKED${lockText}` : '');
+    setEnemyTelegraph('');
     setCommitted([]);
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
+    setDiscardsUsedTurn(0);
+    if (turnNum === 1) setRerollsUsedEnemy(0);
     setRound(1);
     setPhase('drafting');
   };
@@ -195,10 +172,9 @@ export default function useCombat() {
 
   /** When the enemy changes, announce and start the first turn */
   useEffect(() => {
-    addLog(`Battle begins: ${enemy.name} (${enemy.hp} HP, ${enemy.attack} ATK)`);
-    if (enemy.ability) addLog(`Passive: ${abilityDescription(enemy.ability)}`);
     // Build a fresh deck and initial card pool for this battle.
     const [newDeck, initialPool] = buildBattleDeck();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDeck(newDeck);
     setCurrentRow(initialPool);
     setDeckShuffleCount(1);
@@ -230,7 +206,7 @@ export default function useCombat() {
     // Fill only truly empty slots (undefined/null). E is a real card in hand.
     const emptyIndex = committed.findIndex((t) => t === undefined || t === null);
     const newCommitted = [...committed];
-    let placedIndex = 0;
+    let placedIndex;
     if (emptyIndex >= 0) {
       newCommitted[emptyIndex] = tile;
       placedIndex = emptyIndex;
@@ -245,7 +221,6 @@ export default function useCombat() {
     setSelectedCommittedIndex(placedIndex);
     setPicksUsed((v) => v + 1);
 
-    const nextRound = round + 1;
     setRound((r) => r + 1);
 
     // Draw the replacement card from the persistent battle deck.
@@ -286,8 +261,7 @@ export default function useCombat() {
 
   /** Spend mana to reroll all 4 cards (max 2 per run) */
   const reroll = () => {
-    if (rerollLocked) return;
-    if (rerollsUsedRun >= TUNING.draft.maxRerollsPerRun) return;
+    if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
@@ -304,7 +278,11 @@ export default function useCombat() {
     setDeck(workingDeck);
     if (reshuffleHits > 0) setDeckShuffleCount((v) => v + reshuffleHits);
     setCurrentRow(newPool);
-    setRerollsUsedRun((v) => v + 1);
+    setRerollsUsedEnemy((v) => v + 1);
+    if (enemy.ability === 'adaptive') {
+      setEnemyShield((s) => s + 25);
+      addLog(`  ${enemy.name} adapts: +25 shield (reroll)`);
+    }
   };
 
   /** Select a committed tile index to discard. Clicking again clears selection. */
@@ -321,6 +299,7 @@ export default function useCombat() {
    */
   const discardSelected = () => {
     if (committed.length === 0) return;
+    if (discardsUsedTurn >= TUNING.draft.maxDiscardsPerTurn) return;
     const discardIndex =
       selectedCommittedIndex !== null && selectedCommittedIndex >= 0 && selectedCommittedIndex < committed.length
         ? selectedCommittedIndex
@@ -344,7 +323,12 @@ export default function useCombat() {
 
     // Discard allows one additional pick this turn.
     setPickLimit((limit) => limit + 1);
+    setDiscardsUsedTurn((v) => v + 1);
     setSelectedCommittedIndex(null);
+    if (enemy.ability === 'adaptive') {
+      setEnemyShield((s) => s + 25);
+      addLog(`  ${enemy.name} adapts: +25 shield (discard)`);
+    }
   };
 
   /** Move one action card to an empty hand slot (null/undefined only). */
@@ -408,9 +392,14 @@ export default function useCombat() {
     addLog(logParts.join(' / '));
 
     // --- Apply player damage to enemy (enemy shield absorbs first) ---
-    const enemyAbsorbed = Math.min(enemyShield, damage);
+    const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
+    const effectiveDamage = Math.max(0, damage - armoredReduction);
+    if (armoredReduction > 0) {
+      addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
+    }
+    const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
     const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
-    const dealtToHp = damage - enemyAbsorbed;
+    const dealtToHp = effectiveDamage - enemyAbsorbed;
     const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
     if (enemyAbsorbed > 0) {
       addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
@@ -420,10 +409,13 @@ export default function useCombat() {
 
     if (newEnemyHp <= 0) {
       const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
+      const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
       setPlayerShield(shieldAfterGain);
       setPlayerMana(manaAfterFoe);
+      setPlayerHp(hpAfterFoe);
       addLog(`✦ ${enemy.name} defeated`);
       addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
+      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
       setPhase('victory');
       return;
     }
@@ -500,8 +492,8 @@ export default function useCombat() {
     setEnemyShield(0);
     setTurn(1);
     setLog([]);
-    // Restart starts a fresh run budget.
-    setRerollsUsedRun(0);
+    setRerollsUsedEnemy(0);
+    setDiscardsUsedTurn(0);
     setSelectedCommittedIndex(null);
     // Rebuild the deck and pool for this fight.
     const [newDeck, initialPool] = buildBattleDeck();
@@ -519,7 +511,8 @@ export default function useCombat() {
   const discardCost = getDiscardCost();
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = picksUsed >= pickLimit;
-  const rerollsLeftRun = Math.max(0, TUNING.draft.maxRerollsPerRun - rerollsUsedRun);
+  const rerollsLeftEnemy = Math.max(0, TUNING.draft.maxRerollsPerEnemy - rerollsUsedEnemy);
+  const discardsLeftTurn = Math.max(0, TUNING.draft.maxDiscardsPerTurn - discardsUsedTurn);
   const deckCounts = deck.reduce((acc, card) => {
     acc[card] = (acc[card] || 0) + 1;
     return acc;
@@ -545,13 +538,14 @@ export default function useCombat() {
       pickLimit,
       handSlotCount,
       currentRow,
-      rerollsUsedRun,
+      rerollsUsedEnemy,
+      discardsUsedTurn,
       deckSize: deck.length,
       deckCounts,
       deckShuffleCount,
       deckIsShuffled: true,
-      rerollsLeftRun,
-      rerollLocked,
+      rerollsLeftEnemy,
+      discardsLeftTurn,
       log,
       phase,
       incomingDamage,

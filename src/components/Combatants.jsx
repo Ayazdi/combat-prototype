@@ -1,4 +1,3 @@
-import React from 'react';
 import { TUNING } from '../constants';
 import { styles } from '../styles';
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { styles } from '../styles';
 import { tileGlyph, tileStyle } from '../tileHelpers';
 
