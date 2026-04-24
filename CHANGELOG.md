@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-04-24
+
 ### Added
 - Added card entry animations for board refills and committed hand slots.
 - Added epic combat banners for turn starts, player outcomes, and enemy outcomes.
