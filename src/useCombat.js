@@ -8,7 +8,7 @@ import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, fi
 //
 // Return value:
 //   state   – all reactive values the UI reads
-//   actions – { pickTile, selectCommittedTile, reroll, discardSelected, discardBoardTile, nextEnemy, restart }
+//   actions – { pickTile, selectCommittedTile, reroll, discardSelected, discardBoardTile, applyPerk, nextEnemy, restart }
 // ============================================================
 export default function useCombat() {
   // --- Core player / enemy state ---
@@ -16,6 +16,8 @@ export default function useCombat() {
   const [playerHp, setPlayerHp] = useState(TUNING.player.maxHp);
   const [playerMana, setPlayerMana] = useState(TUNING.player.startingMana);
   const [playerShield, setPlayerShield] = useState(0);
+  const [playerDamageBonusPct, setPlayerDamageBonusPct] = useState(0);
+  const [playerDefenceBonusPct, setPlayerDefenceBonusPct] = useState(0);
   const [enemyHp, setEnemyHp] = useState(TUNING.enemies[0].hp);
   const [enemyShield, setEnemyShield] = useState(0);
 
@@ -39,6 +41,8 @@ export default function useCombat() {
   const [incomingDamage, setIncomingDamage] = useState(0);
   const [enemyTelegraph, setEnemyTelegraph] = useState('');
   const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
+  const [victoryReward, setVictoryReward] = useState(null);
+  const [selectedPerkKey, setSelectedPerkKey] = useState(null);
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
@@ -88,6 +92,49 @@ export default function useCombat() {
     return enemy.ability === 'double_discard'
       ? TUNING.draft.discardCost * 2
       : TUNING.draft.discardCost;
+  };
+
+  const getPerkScale = (defeatedEnemyIndex) => {
+    return 1 + defeatedEnemyIndex * TUNING.rewardPerks.perEnemyGrowthRate;
+  };
+
+  const formatPercent = (value) => {
+    return `${Math.round(value * 100)}%`;
+  };
+
+  const buildPerkOptions = (defeatedEnemyIndex) => {
+    const scale = getPerkScale(defeatedEnemyIndex);
+    const damageIncrease = TUNING.rewardPerks.damageIncreaseBase * scale;
+    const defenceIncrease = TUNING.rewardPerks.defenceIncreaseBase * scale;
+    const manaBonus = Math.round(TUNING.rewardPerks.manaBonusBase * scale);
+    const hpBonus = Math.round(TUNING.rewardPerks.hpBonusBase * scale);
+
+    return [
+      {
+        key: 'damage',
+        label: `+${formatPercent(damageIncrease)} Damage`,
+        detail: 'Future attacks hit harder',
+        amount: damageIncrease,
+      },
+      {
+        key: 'defence',
+        label: `+${formatPercent(defenceIncrease)} Defence`,
+        detail: 'Future shield gains improve',
+        amount: defenceIncrease,
+      },
+      {
+        key: 'mana',
+        label: `+${manaBonus} Mana`,
+        detail: 'Restore mana up to max',
+        amount: manaBonus,
+      },
+      {
+        key: 'hp',
+        label: `+${hpBonus} HP`,
+        detail: 'Restore HP up to max',
+        amount: hpBonus,
+      },
+    ];
   };
 
   /** Enemy defend amount is explicit per enemy definition. */
@@ -242,7 +289,10 @@ export default function useCombat() {
     if (phase !== 'drafting') return;
     if (committed.length === 0) return;
 
-    const bestCombo = findBestAcceptedSequence(committed);
+    const bestCombo = findBestAcceptedSequence(committed, {
+      damageMultiplier: 1 + playerDamageBonusPct,
+      defenceMultiplier: 1 + playerDefenceBonusPct,
+    });
 
     if (bestCombo) {
       if (bestCombo.sequence !== committed.join('')) {
@@ -257,12 +307,14 @@ export default function useCombat() {
     }
   };
 
-  /** Spend mana to reroll all 4 cards (max 2 per run) */
+  /** Spend mana to reroll the board without ending the turn or spending a pick. */
   const reroll = () => {
+    if (phase !== 'drafting') return;
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
+    // Reroll intentionally does not change turn, round, picks used, or pick limit.
     const composition = getBattleDeckComposition();
     let workingDeck = deck;
     let reshuffleHits = 0;
@@ -384,7 +436,10 @@ export default function useCombat() {
   // ----------------------------------------------------------
   const resolveTurn = (finalSequence) => {
     setPhase('resolving');
-    const { damage, block, segments } = computeResolution(finalSequence);
+    const { damage, block, segments } = computeResolution(finalSequence, {
+      damageMultiplier: 1 + playerDamageBonusPct,
+      defenceMultiplier: 1 + playerDefenceBonusPct,
+    });
 
     // Readable log string for the committed sequence
     const seqStr = segments
@@ -434,6 +489,14 @@ export default function useCombat() {
       setPlayerShield(shieldAfterGain);
       setPlayerMana(manaAfterFoe);
       setPlayerHp(hpAfterFoe);
+      setVictoryReward({
+        baseManaGain: TUNING.player.manaRegenPerFoe,
+        baseHpGain: TUNING.player.hpRegenPerFoe,
+        manaAfter: manaAfterFoe,
+        hpAfter: hpAfterFoe,
+        perks: buildPerkOptions(enemyIdx),
+      });
+      setSelectedPerkKey(null);
       addLog(`✦ ${enemy.name} defeated`);
       addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
       addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
@@ -490,14 +553,39 @@ export default function useCombat() {
   // Flow controls — next enemy / restart
   // ----------------------------------------------------------
 
+  const applyPerk = (key) => {
+    if (phase !== 'victory' || selectedPerkKey || !victoryReward) return;
+    const perk = victoryReward.perks.find((option) => option.key === key);
+    if (!perk) return;
+
+    if (perk.key === 'damage') {
+      setPlayerDamageBonusPct((value) => value + perk.amount);
+      addLog(`Perk chosen: ${perk.label}`);
+    } else if (perk.key === 'defence') {
+      setPlayerDefenceBonusPct((value) => value + perk.amount);
+      addLog(`Perk chosen: ${perk.label}`);
+    } else if (perk.key === 'mana') {
+      setPlayerMana((value) => Math.min(TUNING.player.maxMana, value + perk.amount));
+      addLog(`Perk chosen: ${perk.label}`);
+    } else if (perk.key === 'hp') {
+      setPlayerHp((value) => Math.min(TUNING.player.maxHp, value + perk.amount));
+      addLog(`Perk chosen: ${perk.label}`);
+    }
+
+    setSelectedPerkKey(key);
+  };
+
   /** Advance to the next enemy in the gauntlet */
   const nextEnemy = () => {
+    if (!selectedPerkKey) return;
     if (enemyIdx < TUNING.enemies.length - 1) {
       const next = enemyIdx + 1;
       setEnemyIdx(next);
       setEnemyHp(TUNING.enemies[next].hp);
       setEnemyShield(0);
       // Carry current HP/MP/shield to the next fight; no recovery between foes.
+      setVictoryReward(null);
+      setSelectedPerkKey(null);
       setTurn(1);
       setLog([]);
     }
@@ -509,11 +597,15 @@ export default function useCombat() {
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
     setPlayerShield(0);
+    setPlayerDamageBonusPct(0);
+    setPlayerDefenceBonusPct(0);
     setEnemyShield(0);
     setTurn(1);
     setLog([]);
     setRerollsUsedEnemy(0);
     setSelectedCommittedIndex(null);
+    setVictoryReward(null);
+    setSelectedPerkKey(null);
     // Rebuild the deck and pool for this fight.
     const [newDeck, initialPool] = buildBattleDeck();
     setDeck(newDeck);
@@ -525,8 +617,12 @@ export default function useCombat() {
   // ----------------------------------------------------------
   // Derived / computed values the UI needs
   // ----------------------------------------------------------
-  const bestCombo = findBestAcceptedSequence(committed);
-  const preview = computeResolution(bestCombo ? bestCombo.tiles : []);
+  const resolutionModifiers = {
+    damageMultiplier: 1 + playerDamageBonusPct,
+    defenceMultiplier: 1 + playerDefenceBonusPct,
+  };
+  const bestCombo = findBestAcceptedSequence(committed, resolutionModifiers);
+  const preview = computeResolution(bestCombo ? bestCombo.tiles : [], resolutionModifiers);
   const discardCost = getDiscardCost();
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = picksUsed >= pickLimit;
@@ -548,6 +644,8 @@ export default function useCombat() {
       playerHp,
       playerMana,
       playerShield,
+      playerDamageBonusPct,
+      playerDefenceBonusPct,
       turn,
       round,
       committed,
@@ -571,6 +669,8 @@ export default function useCombat() {
       discardCost,
       sequenceValid,
       sequenceFull,
+      victoryReward,
+      selectedPerkKey,
       logEndRef,
     },
     actions: {
@@ -580,6 +680,7 @@ export default function useCombat() {
       reroll,
       discardSelected,
       discardBoardTile,
+      applyPerk,
       submitSequence,
       nextEnemy,
       restart,

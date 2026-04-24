@@ -84,6 +84,9 @@ export default function DraftCombat() {
           phase={state.phase}
           enemy={state.enemy}
           enemyIdx={state.enemyIdx}
+          victoryReward={state.victoryReward}
+          selectedPerkKey={state.selectedPerkKey}
+          onApplyPerk={actions.applyPerk}
           onRestart={actions.restart}
           onNextEnemy={actions.nextEnemy}
         />

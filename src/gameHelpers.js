@@ -20,10 +20,12 @@ export const rollRow = (weights, size = TUNING.draft.rowSize) => {
   return row;
 };
 
-export const computeResolution = (committed) => {
+export const computeResolution = (committed, modifiers = {}) => {
   let damage = 0;
   let block = 0;
   const segments = [];
+  const damageMultiplier = modifiers.damageMultiplier ?? 1;
+  const defenceMultiplier = modifiers.defenceMultiplier ?? 1;
 
   // With the new rules committed must be a single pure run (AA, DDD, etc.)
   // but we still parse generically so the preview works for partial picks too.
@@ -37,12 +39,12 @@ export const computeResolution = (committed) => {
     const cap = Math.min(count, 5);
     if (t === 'A') {
       const mult = TUNING.tiles.attackCombos[cap] || 1;
-      const dmg = Math.round(TUNING.tiles.attackBase * mult);
+      const dmg = Math.round(TUNING.tiles.attackBase * mult * damageMultiplier);
       damage += dmg;
       segments.push({ type: 'A', count, damage: dmg, mult });
     } else if (t === 'D') {
       const mult = TUNING.tiles.defenceCombos[cap] || 1;
-      const blk = Math.round(TUNING.tiles.defenceBase * mult);
+      const blk = Math.round(TUNING.tiles.defenceBase * mult * defenceMultiplier);
       block += blk;
       segments.push({ type: 'D', count, block: blk, mult });
     }
@@ -55,7 +57,7 @@ export const computeResolution = (committed) => {
  * Find the strongest accepted combo that exists in the submitted hand.
  * "Strongest" is based on current tuning using score = damage + block.
  */
-export const findBestAcceptedSequence = (committed) => {
+export const findBestAcceptedSequence = (committed, modifiers = {}) => {
   const submitted = committed.join('');
   if (!submitted) return null;
 
@@ -64,7 +66,7 @@ export const findBestAcceptedSequence = (committed) => {
     if (!submitted.includes(combo)) continue;
 
     const tiles = combo.split('');
-    const resolution = computeResolution(tiles);
+    const resolution = computeResolution(tiles, modifiers);
     const score = resolution.damage + resolution.block;
 
     if (

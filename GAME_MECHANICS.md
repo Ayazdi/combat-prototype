@@ -22,6 +22,21 @@ Player shield persists between turns and across enemy kills until it is absorbed
 
 ---
 
+## Victory Perks
+
+After each enemy kill, the player receives the normal kill reward and must choose one perk before advancing:
+
+| Perk | First Kill Value |
+|---|---:|
+| Damage increase | +10% |
+| Defence increase | +10% |
+| Extra Mana | +15 Mana, capped to max Mana |
+| Extra HP | +20 HP, capped to max HP |
+
+Perk values scale by kill number using `TUNING.rewardPerks.perEnemyGrowthRate`. With the default `0.2` growth, the second kill offers +12% damage or defence.
+
+---
+
 ## Deck (Per Fight)
 
 Each battle starts with a fresh shuffled 40-card deck:
@@ -61,6 +76,7 @@ Combo multipliers:
 - Cost: 25 MP
 - Limit: 1 per enemy
 - Effect: redraws all 8 board tiles
+- Does not end the turn and does not spend a pick
 
 ### Discard
 
