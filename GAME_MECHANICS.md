@@ -76,6 +76,7 @@ Combo multipliers:
 - Cost: 25 MP
 - Limit: 1 per enemy
 - Effect: redraws all 8 board tiles
+- Does not end the turn and does not spend a pick
 
 ### Discard
 

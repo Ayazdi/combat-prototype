@@ -309,12 +309,14 @@ export default function useCombat() {
     }
   };
 
-  /** Spend mana to reroll all 4 cards (max 2 per run) */
+  /** Spend mana to reroll the board without ending the turn or spending a pick. */
   const reroll = () => {
+    if (phase !== 'drafting') return;
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
+    // Reroll intentionally does not change turn, round, picks used, or pick limit.
     const composition = getBattleDeckComposition();
     let workingDeck = deck;
     let reshuffleHits = 0;
