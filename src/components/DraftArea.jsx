@@ -17,7 +17,6 @@ export default function DraftArea({
   phase,
   currentRow,
   rerollsLeftEnemy,
-  discardsLeftTurn,
   playerMana,
   discardCost,
   deckSize,
@@ -33,6 +32,7 @@ export default function DraftArea({
   onPickTile,
   onReroll,
   onDiscardSelected,
+  onDiscardBoardTile,
   onSubmit,
 }) {
   const rerollDisabled =
@@ -42,11 +42,11 @@ export default function DraftArea({
     phase !== 'drafting' ||
     committedLength === 0 ||
     selectedCommittedIndex === null ||
-    discardsLeftTurn <= 0 ||
     playerMana < discardCost;
 
   // Can't pick more tiles once we hit the max
   const pickDisabled = phase !== 'drafting' || sequenceFull;
+  const boardDiscardDisabled = phase !== 'drafting' || playerMana < discardCost;
 
   // Submit requires at least 1 tile committed
   const submitDisabled = phase !== 'drafting' || committedLength === 0;
@@ -72,16 +72,31 @@ export default function DraftArea({
       {/* Tile row — one button per tile */}
       <div style={styles.row}>
         {currentRow.map((tile, i) => (
-          <button
-            key={i}
-            onClick={() => onPickTile(i)}
-            disabled={pickDisabled}
-            style={{ ...styles.tile, ...tileStyle(tile) }}
-            className="tile-btn"
-          >
-            <div style={styles.tileGlyph}>{tileGlyph(tile)}</div>
-            <div style={styles.tileLabel}>{tileLabel(tile)}</div>
-          </button>
+          <div key={i} style={styles.tileWrap}>
+            <button
+              onClick={() => onPickTile(i)}
+              disabled={pickDisabled}
+              style={{ ...styles.tile, ...tileStyle(tile) }}
+              className="tile-btn"
+            >
+              <div style={styles.tileGlyph}>{tileGlyph(tile)}</div>
+              <div style={styles.tileLabel}>{tileLabel(tile)}</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onDiscardBoardTile(i)}
+              disabled={boardDiscardDisabled}
+              style={{
+                ...styles.boardDiscardBtn,
+                ...(boardDiscardDisabled ? styles.boardDiscardBtnDisabled : {}),
+              }}
+              className="tile-discard-btn"
+              aria-label={`Discard ${tileLabel(tile)} from board`}
+              title={`Discard from board (${discardCost} MP)`}
+            >
+              x
+            </button>
+          </div>
         ))}
       </div>
 
@@ -122,7 +137,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>✕</span>
           <span>DISCARD SELECTED</span>
-          <span style={styles.ctrlCost}>{discardCost} MP • {discardsLeftTurn} LEFT (TURN)</span>
+          <span style={styles.ctrlCost}>{discardCost} MP</span>
         </button>
 
         {/* SUBMIT — highlighted green when the sequence is valid */}

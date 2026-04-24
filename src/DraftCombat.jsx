@@ -47,7 +47,6 @@ export default function DraftCombat() {
           phase={state.phase}
           currentRow={state.currentRow}
           rerollsLeftEnemy={state.rerollsLeftEnemy}
-          discardsLeftTurn={state.discardsLeftTurn}
           playerMana={state.playerMana}
           discardCost={state.discardCost}
           deckSize={state.deckSize}
@@ -57,12 +56,13 @@ export default function DraftCombat() {
           picksUsed={state.picksUsed}
           pickLimit={state.pickLimit}
           committedLength={state.committed.length}
-                selectedCommittedIndex={state.selectedCommittedIndex}
+          selectedCommittedIndex={state.selectedCommittedIndex}
           sequenceValid={state.sequenceValid}
           sequenceFull={state.sequenceFull}
           onPickTile={actions.pickTile}
           onReroll={actions.reroll}
           onDiscardSelected={actions.discardSelected}
+          onDiscardBoardTile={actions.discardBoardTile}
           onSubmit={actions.submitSequence}
         />
 

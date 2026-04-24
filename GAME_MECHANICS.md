@@ -63,8 +63,9 @@ Combo multipliers:
 ### Discard
 
 - Cost: 25 MP (50 MP versus Witch)
-- Limit: 1 per turn
-- Effect: remove selected committed tile, return that tile to deck, and gain +1 extra pick for the same turn
+- Limit: no use limit beyond available MP
+- Effect from committed sequence: permanently remove selected committed tile and gain +1 extra pick for the same turn
+- Effect from board: permanently remove selected board tile and immediately draw a replacement into that board slot
 
 ---
 

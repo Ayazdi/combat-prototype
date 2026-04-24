@@ -22,7 +22,6 @@ export const TUNING = {
     maxSequence: 5,
     // Action limits.
     maxRerollsPerEnemy: 1,
-    maxDiscardsPerTurn: 1,
     rerollCost: 25,
     discardCost: 25,
   },
