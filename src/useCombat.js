@@ -53,6 +53,7 @@ export default function useCombat() {
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
+  const combatBannerTimeoutRef = useRef(null);
   // Intent bag ensures 2:1 attack:defend ratio with random order.
   const enemyIntentBagRef = useRef([]);
 
@@ -65,8 +66,18 @@ export default function useCombat() {
   /** Append a line to the battle log */
   const addLog = (entry) => setLog((l) => [...l, entry]);
 
-  const showCombatBanner = (banner) => {
+  const showCombatBanner = (banner, duration = 0) => {
+    if (combatBannerTimeoutRef.current) {
+      clearTimeout(combatBannerTimeoutRef.current);
+      combatBannerTimeoutRef.current = null;
+    }
     setCombatBanner({ ...banner, id: Date.now() });
+    if (duration > 0) {
+      combatBannerTimeoutRef.current = setTimeout(() => {
+        setCombatBanner(null);
+        combatBannerTimeoutRef.current = null;
+      }, duration);
+    }
   };
 
   const formatPlayerAction = (damage, block) => {
@@ -220,7 +231,12 @@ export default function useCombat() {
 
     setIncomingDamage(incoming);
     setEnemyTelegraph('');
-    setCombatBanner(null);
+    showCombatBanner({
+      eyebrow: 'Player Turn',
+      title: 'Your move',
+      detail: `Turn ${turnNum}`,
+      tone: 'player',
+    }, 1600);
     setCommitted([]);
     setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setSelectedCommittedIndex(null);
@@ -488,13 +504,6 @@ export default function useCombat() {
       })
       .join(' ');
 
-    showCombatBanner({
-      eyebrow: 'Player Turn',
-      title: 'Your move',
-      detail: 'Resolving committed sequence',
-      tone: 'player',
-    });
-
     setTimeout(() => {
       // --- Shield gain (capped at max) ---
       const shieldBefore = playerShield;
@@ -580,9 +589,9 @@ export default function useCombat() {
           setPlayerShield(shieldAfterGain);
           addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
           showCombatBanner({
-            eyebrow: 'Enemy Action',
-            title: `${enemy.name} shielded ${currentIntent.amount}`,
-            detail: `Enemy shield ${shieldAfterEnemyAction}`,
+            eyebrow: enemy.name,
+            title: `Shield +${currentIntent.amount}`,
+            detail: `Shield total ${shieldAfterEnemyAction}`,
             tone: 'enemy',
           });
         } else {
@@ -599,8 +608,8 @@ export default function useCombat() {
           }
           setPlayerShield(shieldAfterHit);
           showCombatBanner({
-            eyebrow: 'Enemy Action',
-            title: `${enemy.name} attacked ${rawDmg}`,
+            eyebrow: enemy.name,
+            title: `Attack ${rawDmg} damage`,
             detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
             tone: 'enemy',
           });
@@ -626,7 +635,7 @@ export default function useCombat() {
           startTurn(nextTurn, nextQueue);
         }, 1400);
       }, 2200);
-    }, 1000);
+    }, 250);
   };
 
   // ----------------------------------------------------------

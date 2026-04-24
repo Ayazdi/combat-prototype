@@ -11,6 +11,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 - Added epic combat banners for turn starts, player outcomes, and enemy outcomes.
 
 ### Changed
+- Player turn banners now appear at the start of each draft turn instead of after submitting an action.
+- Enemy action banners now avoid repeating "Enemy" alongside the enemy name.
 - Updated No Action cards with a heavier cement-block visual treatment.
 
 ## [0.1.4] - 2026-04-24
