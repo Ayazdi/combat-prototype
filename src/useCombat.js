@@ -497,8 +497,7 @@ export default function useCombat() {
       setEnemyIdx(next);
       setEnemyHp(TUNING.enemies[next].hp);
       setEnemyShield(0);
-      // Carry current HP/MP to the next fight; no recovery between foes.
-      setPlayerShield(0);
+      // Carry current HP/MP/shield to the next fight; no recovery between foes.
       setTurn(1);
       setLog([]);
     }
