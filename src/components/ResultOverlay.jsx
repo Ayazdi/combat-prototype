@@ -6,7 +6,16 @@ import { styles } from '../styles';
 // defeat. Offers "replay" (restart same enemy) and, on
 // victory, "next foe" to advance through the gauntlet.
 // ============================================================
-export default function ResultOverlay({ phase, enemy, enemyIdx, onRestart, onNextEnemy }) {
+export default function ResultOverlay({
+  phase,
+  enemy,
+  enemyIdx,
+  victoryReward,
+  selectedPerkKey,
+  onApplyPerk,
+  onRestart,
+  onNextEnemy,
+}) {
   if (phase !== 'victory' && phase !== 'defeat') return null;
 
   const isVictory = phase === 'victory';
@@ -27,7 +36,35 @@ export default function ResultOverlay({ phase, enemy, enemyIdx, onRestart, onNex
 
         {isVictory && (
           <div style={styles.overlayReward}>
-            Gain from victory: +{TUNING.player.manaRegenPerFoe} Mana
+            <div>Victory reward</div>
+            <div>
+              +{victoryReward?.baseManaGain ?? TUNING.player.manaRegenPerFoe} Mana / +{victoryReward?.baseHpGain ?? TUNING.player.hpRegenPerFoe} HP
+            </div>
+          </div>
+        )}
+
+        {isVictory && victoryReward && (
+          <div style={styles.perkGrid}>
+            {victoryReward.perks.map((perk) => {
+              const isSelected = selectedPerkKey === perk.key;
+              return (
+                <button
+                  key={perk.key}
+                  type="button"
+                  onClick={() => onApplyPerk(perk.key)}
+                  disabled={Boolean(selectedPerkKey)}
+                  style={{
+                    ...styles.perkBtn,
+                    ...(isSelected ? styles.perkBtnSelected : {}),
+                    ...(selectedPerkKey && !isSelected ? styles.perkBtnDisabled : {}),
+                  }}
+                  className="overlay-btn"
+                >
+                  <span style={styles.perkLabel}>{perk.label}</span>
+                  <span style={styles.perkDetail}>{perk.detail}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -39,7 +76,12 @@ export default function ResultOverlay({ phase, enemy, enemyIdx, onRestart, onNex
           {isVictory && enemyIdx < TUNING.enemies.length - 1 && (
             <button
               onClick={onNextEnemy}
-              style={{ ...styles.overlayBtn, ...styles.overlayBtnPrimary }}
+              disabled={!selectedPerkKey}
+              style={{
+                ...styles.overlayBtn,
+                ...styles.overlayBtnPrimary,
+                ...(!selectedPerkKey ? styles.overlayBtnDisabled : {}),
+              }}
               className="overlay-btn"
             >
               NEXT FOE →

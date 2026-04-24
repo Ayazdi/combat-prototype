@@ -64,9 +64,12 @@ export const globalCss = `
     cursor: pointer;
     transition: all 0.2s ease;
   }
-  .overlay-btn:hover {
+  .overlay-btn:not(:disabled):hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  }
+  .overlay-btn:disabled {
+    cursor: not-allowed;
   }
 
   /* Entrance animation for tiles and overlays */
@@ -502,10 +505,12 @@ export const styles = {
   },
   overlayContent: {
     textAlign: 'center',
-    padding: '40px 50px',
+    padding: '36px 42px',
     background: 'linear-gradient(180deg, #1a1612 0%, #0a0806 100%)',
     border: '1px solid #3a342a',
-    maxWidth: 360,
+    width: 'min(560px, calc(100vw - 32px))',
+    maxHeight: 'calc(100vh - 32px)',
+    overflowY: 'auto',
     borderRadius: 2,
   },
   overlayMark: { fontSize: 44, color: '#d4a24c', marginBottom: 12 },
@@ -528,8 +533,47 @@ export const styles = {
     fontSize: 12,
     color: '#8ad88a',
     letterSpacing: '0.08em',
-    marginBottom: 28,
+    marginBottom: 18,
     fontWeight: 600,
+  },
+  perkGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: 10,
+    marginBottom: 24,
+  },
+  perkBtn: {
+    minHeight: 76,
+    padding: '12px 10px',
+    background: '#14110e',
+    border: '1px solid #3a342a',
+    color: '#b8a88a',
+    fontFamily: '"JetBrains Mono", monospace',
+    borderRadius: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  perkBtnSelected: {
+    background: 'linear-gradient(180deg, #1a2e1a 0%, #102a10 100%)',
+    borderColor: '#8ad88a',
+    color: '#8ad88a',
+  },
+  perkBtnDisabled: {
+    opacity: 0.42,
+  },
+  perkLabel: {
+    fontSize: 12,
+    letterSpacing: '0.08em',
+    fontWeight: 700,
+  },
+  perkDetail: {
+    fontSize: 10,
+    color: '#7a7265',
+    letterSpacing: '0.06em',
+    lineHeight: 1.35,
   },
   overlayButtons: { display: 'flex', gap: 10, justifyContent: 'center' },
   overlayBtn: {
@@ -547,5 +591,9 @@ export const styles = {
     background: 'linear-gradient(180deg, #d4a24c 0%, #a67c2a 100%)',
     color: '#1a1612',
     borderColor: '#d4a24c',
+  },
+  overlayBtnDisabled: {
+    opacity: 0.4,
+    filter: 'grayscale(0.35)',
   },
 };

@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+- Added post-kill perk selection with configurable damage, defence, mana, and HP reward options.
+
+### Changed
+- Victory now shows base HP and mana rewards in the result message before advancing.
+
 ## [0.1.3] - 2026-04-24
 
 ### Changed

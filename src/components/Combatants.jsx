@@ -7,7 +7,9 @@ import { styles } from '../styles';
 // ============================================================
 export default function Combatants({
   playerHp,
+  playerMaxHp,
   playerMana,
+  playerMaxMana,
   playerShield,
   enemy,
   enemyHp,
@@ -25,14 +27,14 @@ export default function Combatants({
         <StatBar
           label="HP"
           current={playerHp}
-          max={TUNING.player.maxHp}
+          max={playerMaxHp}
           gradient="linear-gradient(90deg, #c8412e 0%, #e56947 100%)"
         />
         {/* MP bar */}
         <StatBar
           label="MP"
           current={playerMana}
-          max={TUNING.player.maxMana}
+          max={playerMaxMana}
           gradient="linear-gradient(90deg, #2c5d8f 0%, #4a8bc2 100%)"
         />
         {/* Shield bar */}

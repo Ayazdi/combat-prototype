@@ -10,6 +10,14 @@ export const TUNING = {
     hpRegenPerFoe: 20,
     startingMana: 100,
   },
+  rewardPerks: {
+    // Scales perk values by kill number. 0.2 makes the second kill's 10% perk become 12%.
+    perEnemyGrowthRate: 0.2,
+    damageIncreaseBase: 0.10,
+    defenceIncreaseBase: 0.10,
+    manaBonusBase: 15,
+    hpBonusBase: 20,
+  },
   tiles: {
     attackBase: 30,
     defenceBase: 15,
