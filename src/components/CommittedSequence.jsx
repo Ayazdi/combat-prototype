@@ -112,6 +112,11 @@ export default function CommittedSequence({
             </span>
           ))
         )}
+        {preview.finisherBonusPct > 0 && (
+          <span style={{ ...styles.segChip, ...styles.segChipFinisher }}>
+            FINISHER +{Math.round(preview.finisherBonusPct * 100)}%
+          </span>
+        )}
       </div>
     </section>
   );

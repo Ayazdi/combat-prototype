@@ -26,6 +26,11 @@ export const computeResolution = (committed, modifiers = {}) => {
   const segments = [];
   const damageMultiplier = modifiers.damageMultiplier ?? 1;
   const defenceMultiplier = modifiers.defenceMultiplier ?? 1;
+  const isFinisher =
+    committed.length === TUNING.draft.maxSequence &&
+    committed.every((tile) => tile === 'A' || tile === 'D');
+  const finisherBonusPct = isFinisher ? TUNING.tiles.fullComboBonusPct : 0;
+  const finisherMultiplier = 1 + finisherBonusPct;
 
   // With the new rules committed must be a single pure run (AA, DDD, etc.)
   // but we still parse generically so the preview works for partial picks too.
@@ -39,18 +44,18 @@ export const computeResolution = (committed, modifiers = {}) => {
     const cap = Math.min(count, 5);
     if (t === 'A') {
       const mult = TUNING.tiles.attackCombos[cap] || 1;
-      const dmg = Math.round(TUNING.tiles.attackBase * mult * damageMultiplier);
+      const dmg = Math.round(TUNING.tiles.attackBase * mult * damageMultiplier * finisherMultiplier);
       damage += dmg;
       segments.push({ type: 'A', count, damage: dmg, mult });
     } else if (t === 'D') {
       const mult = TUNING.tiles.defenceCombos[cap] || 1;
-      const blk = Math.round(TUNING.tiles.defenceBase * mult * defenceMultiplier);
+      const blk = Math.round(TUNING.tiles.defenceBase * mult * defenceMultiplier * finisherMultiplier);
       block += blk;
       segments.push({ type: 'D', count, block: blk, mult });
     }
     i = j;
   }
-  return { damage, block, segments };
+  return { damage, block, segments, finisherBonusPct };
 };
 
 /**

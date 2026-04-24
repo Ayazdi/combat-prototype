@@ -287,6 +287,37 @@ export const styles = {
     padding: '3px 6px',
     borderRadius: 2,
   },
+  telegraphChipDanger: {
+    color: '#e8a890',
+    borderColor: 'rgba(198, 72, 56, 0.55)',
+    background: 'rgba(58, 22, 18, 0.85)',
+    boxShadow: '0 0 12px rgba(198, 72, 56, 0.22)',
+  },
+
+  // --- Run modifiers ---
+  statusChips: {
+    display: 'flex',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  statusChip: {
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    padding: '4px 7px',
+    border: '1px solid',
+    borderRadius: 2,
+    background: '#11100d',
+    fontWeight: 600,
+  },
+  statusChipDamage: {
+    color: '#e8a890',
+    borderColor: 'rgba(232, 168, 144, 0.42)',
+  },
+  statusChipDefence: {
+    color: '#8ab4d8',
+    borderColor: 'rgba(138, 180, 216, 0.42)',
+  },
 
   // --- Versus divider ---
   versus: {
@@ -513,6 +544,12 @@ export const styles = {
     color: '#b8a88a',
     letterSpacing: '0.1em',
     borderRadius: 2,
+  },
+  segChipFinisher: {
+    color: '#e8c98c',
+    borderColor: 'rgba(212, 162, 76, 0.55)',
+    background: 'rgba(70, 48, 18, 0.45)',
+    boxShadow: '0 0 10px rgba(212, 162, 76, 0.18)',
   },
   breakdownEmpty: {
     fontSize: 10,

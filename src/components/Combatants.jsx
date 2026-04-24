@@ -9,6 +9,8 @@ export default function Combatants({
   playerHp,
   playerMana,
   playerShield,
+  playerDamageBonusPct,
+  playerDefenceBonusPct,
   enemy,
   enemyHp,
   enemyShield,
@@ -42,6 +44,20 @@ export default function Combatants({
           max={TUNING.player.maxShield}
           gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
         />
+        {(playerDamageBonusPct > 0 || playerDefenceBonusPct > 0) && (
+          <div style={styles.statusChips}>
+            {playerDamageBonusPct > 0 && (
+              <span style={{ ...styles.statusChip, ...styles.statusChipDamage }}>
+                DMG +{Math.round(playerDamageBonusPct * 100)}%
+              </span>
+            )}
+            {playerDefenceBonusPct > 0 && (
+              <span style={{ ...styles.statusChip, ...styles.statusChipDefence }}>
+                DEF +{Math.round(playerDefenceBonusPct * 100)}%
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ---- Versus divider ---- */}
@@ -83,7 +99,13 @@ export default function Combatants({
           {enemyIntentQueue?.length > 0 && (
             <div style={styles.telegraphQueue}>
               {enemyIntentQueue.slice(0, 2).map((intent, i) => (
-                <span key={i} style={styles.telegraphChip}>
+                <span
+                  key={i}
+                  style={{
+                    ...styles.telegraphChip,
+                    ...(intent.enragedBonus > 0 ? styles.telegraphChipDanger : {}),
+                  }}
+                >
                   {i === 0 ? 'NOW' : 'NEXT'}: {intent.text}
                 </span>
               ))}

@@ -6,6 +6,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+- Added a full-hand finisher bonus for 5-tile accepted combos with no No Action cards.
+- Added late-turn enemy enrage that increases enemy attack intents from turn 4 onward.
+- Added visible player damage and defence perk status chips.
+- Added dangerous intent highlighting for enraged enemy attacks.
+
+### Changed
+- Rebalanced the battle deck to 13 Attack, 11 Defence, and 16 No Action cards.
+- Updated mechanics documentation for current defence values, Witch HP, shield carryover, and combo tuning.
+
 ## [0.1.5] - 2026-04-24
 
 ### Added

@@ -172,6 +172,12 @@ export default function useCombat() {
     return enemy.defend || 0;
   };
 
+  const getEnemyEnrageBonus = (turnNum) => {
+    const startTurn = TUNING.enemyAI.enrageStartTurn || 0;
+    if (!startTurn || turnNum < startTurn) return 0;
+    return (turnNum - startTurn + 1) * (TUNING.enemyAI.enrageAttackBonusPerTurn || 0);
+  };
+
   const refillEnemyIntentBag = () => {
     const bag = [];
     const attackWeight = TUNING.enemyAI.intentWeights.attack || 0;
@@ -193,15 +199,20 @@ export default function useCombat() {
   /** Build a weighted random enemy intent for a specific turn number. */
   const rollEnemyIntent = (turnNum) => {
     let type = drawEnemyIntentType();
+    const enrageBonus = getEnemyEnrageBonus(turnNum);
 
     // Goblin charged-strike keeps priority on every 3rd turn.
     if (enemy.ability === 'charged_strike' && turnNum % 3 === 0) {
       type = 'attack';
-      return { type, amount: 50, text: 'ATTACK 50 (CHARGED)' };
+      const amount = 50 + enrageBonus;
+      const enrageText = enrageBonus > 0 ? `, ENRAGED +${enrageBonus}` : '';
+      return { type, amount, enragedBonus: enrageBonus, text: `ATTACK ${amount} (CHARGED${enrageText})` };
     }
 
     if (type === 'attack') {
-      return { type, amount: enemy.attack, text: `ATTACK ${enemy.attack}` };
+      const amount = enemy.attack + enrageBonus;
+      const enrageText = enrageBonus > 0 ? ` (ENRAGED +${enrageBonus})` : '';
+      return { type, amount, enragedBonus: enrageBonus, text: `ATTACK ${amount}${enrageText}` };
     }
 
     const defendAmount = getEnemyDefendShield();
@@ -500,7 +511,7 @@ export default function useCombat() {
   // ----------------------------------------------------------
   const resolveTurn = (finalSequence) => {
     setPhase('resolving');
-    const { damage, block, segments } = computeResolution(finalSequence, {
+    const { damage, block, segments, finisherBonusPct } = computeResolution(finalSequence, {
       damageMultiplier: 1 + playerDamageBonusPct,
       defenceMultiplier: 1 + playerDefenceBonusPct,
     });
@@ -530,11 +541,16 @@ export default function useCombat() {
           logParts.push(`+${block} shield`);
         }
       }
+      if (finisherBonusPct > 0) {
+        logParts.push(`finisher +${formatPercent(finisherBonusPct)}`);
+      }
       addLog(logParts.join(' / '));
       showCombatBanner({
         eyebrow: 'Player Action',
         title: formatPlayerAction(damage, block),
-        detail: seqStr || 'No combo resolved',
+        detail: finisherBonusPct > 0
+          ? `${seqStr || 'No combo resolved'} / Finisher +${formatPercent(finisherBonusPct)}`
+          : seqStr || 'No combo resolved',
         tone: 'player',
       });
       if (finalSequence.length >= 2) playSound('combo');

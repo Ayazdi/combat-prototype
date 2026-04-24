@@ -36,6 +36,8 @@ export default function DraftCombat() {
           playerHp={state.playerHp}
           playerMana={state.playerMana}
           playerShield={state.playerShield}
+          playerDamageBonusPct={state.playerDamageBonusPct}
+          playerDefenceBonusPct={state.playerDefenceBonusPct}
           enemy={state.enemy}
           enemyHp={state.enemyHp}
           enemyShield={state.enemyShield}

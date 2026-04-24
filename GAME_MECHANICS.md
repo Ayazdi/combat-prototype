@@ -43,9 +43,9 @@ Each battle starts with a fresh shuffled 40-card deck:
 
 | Tile | Count |
 |---|---|
-| Attack (A) | 12 |
-| Defence (D) | 10 |
-| No Action (E) | 18 |
+| Attack (A) | 13 |
+| Defence (D) | 11 |
+| No Action (E) | 16 |
 
 Board shows 8 tiles. When you pick one, that slot is immediately refilled from the same battle deck.
 No Action cards are blocker cards and use a cement-like visual treatment.
@@ -57,7 +57,7 @@ No Action cards are blocker cards and use a cement-like visual treatment.
 | Action | Formula |
 |---|---|
 | Attack | 30 damage × combo multiplier |
-| Defence | 15 shield × combo multiplier (shield cap 80) |
+| Defence | 20 shield × combo multiplier (shield cap 80) |
 
 Combo multipliers:
 
@@ -66,7 +66,9 @@ Combo multipliers:
 | 2x | 1.4 | 1.4 |
 | 3x | 1.8 | 1.8 |
 | 4x | 2.3 | 2.3 |
-| 5x | 3.0 | 2.5 |
+| 5x | 3.0 | 3.0 |
+
+Full 5-tile accepted combos with no No Action cards gain a finisher bonus of +15% to damage and shield.
 
 ---
 
@@ -93,6 +95,7 @@ Combo multipliers:
 - Enemies always show NOW and NEXT intents.
 - Intent weighting remains 2 Attack : 1 Defend over time.
 - Enemy defend is explicit per enemy (not formula-based).
+- From turn 4 onward, enemy attack intents enrage by +4 damage per turn. This pressure stacks while the fight drags on.
 
 ---
 
@@ -105,7 +108,7 @@ Combo multipliers:
 | Mage | 3 | 230 | 30 | 20 | EmptyPlus (+4 E in battle deck) |
 | Knight | 4 | 320 | 35 | 25 | Armored (-10 per incoming hit) |
 | Warden | 5 | 280 | 38 | 30 | Adaptive (reroll/discard -> +25 shield) |
-| Witch | 6 | 260 | 42 | 35 | DoubleDiscard (discard costs 50 MP) |
+| Witch | 6 | 300 | 42 | 35 | DoubleDiscard (discard costs 50 MP) |
 
 ---
 
@@ -121,7 +124,7 @@ Combo multipliers:
 ## Run Structure
 
 - Player HP and Mana carry between fights.
-- Player and enemy shields reset between fights.
+- Player shield carries between fights; enemy shield resets between fights.
 - Defeat all 6 enemies to win the run.
 
 ---
