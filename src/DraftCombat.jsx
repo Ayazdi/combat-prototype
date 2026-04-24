@@ -33,9 +33,7 @@ export default function DraftCombat() {
         {/* Player & enemy stat bars + telegraph */}
         <Combatants
           playerHp={state.playerHp}
-          playerMaxHp={state.playerMaxHp}
           playerMana={state.playerMana}
-          playerMaxMana={state.playerMaxMana}
           playerShield={state.playerShield}
           enemy={state.enemy}
           enemyHp={state.enemyHp}

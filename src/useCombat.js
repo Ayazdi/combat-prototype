@@ -13,8 +13,6 @@ import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, fi
 export default function useCombat() {
   // --- Core player / enemy state ---
   const [enemyIdx, setEnemyIdx] = useState(0);
-  const [playerMaxHp, setPlayerMaxHp] = useState(TUNING.player.maxHp);
-  const [playerMaxMana, setPlayerMaxMana] = useState(TUNING.player.maxMana);
   const [playerHp, setPlayerHp] = useState(TUNING.player.maxHp);
   const [playerMana, setPlayerMana] = useState(TUNING.player.startingMana);
   const [playerShield, setPlayerShield] = useState(0);
@@ -127,13 +125,13 @@ export default function useCombat() {
       {
         key: 'mana',
         label: `+${manaBonus} Mana`,
-        detail: 'Increase max and current mana',
+        detail: 'Restore mana up to max',
         amount: manaBonus,
       },
       {
         key: 'hp',
         label: `+${hpBonus} HP`,
-        detail: 'Increase max and current HP',
+        detail: 'Restore HP up to max',
         amount: hpBonus,
       },
     ];
@@ -486,8 +484,8 @@ export default function useCombat() {
     setEnemyHp(newEnemyHp);
 
     if (newEnemyHp <= 0) {
-      const manaAfterFoe = Math.min(playerMaxMana, playerMana + TUNING.player.manaRegenPerFoe);
-      const hpAfterFoe = Math.min(playerMaxHp, playerHp + TUNING.player.hpRegenPerFoe);
+      const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
+      const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
       setPlayerShield(shieldAfterGain);
       setPlayerMana(manaAfterFoe);
       setPlayerHp(hpAfterFoe);
@@ -500,8 +498,8 @@ export default function useCombat() {
       });
       setSelectedPerkKey(null);
       addLog(`✦ ${enemy.name} defeated`);
-      addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${playerMaxMana})`);
-      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${playerMaxHp})`);
+      addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
+      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
       setPhase('victory');
       return;
     }
@@ -567,12 +565,10 @@ export default function useCombat() {
       setPlayerDefenceBonusPct((value) => value + perk.amount);
       addLog(`Perk chosen: ${perk.label}`);
     } else if (perk.key === 'mana') {
-      setPlayerMaxMana((value) => value + perk.amount);
-      setPlayerMana((value) => value + perk.amount);
+      setPlayerMana((value) => Math.min(TUNING.player.maxMana, value + perk.amount));
       addLog(`Perk chosen: ${perk.label}`);
     } else if (perk.key === 'hp') {
-      setPlayerMaxHp((value) => value + perk.amount);
-      setPlayerHp((value) => value + perk.amount);
+      setPlayerHp((value) => Math.min(TUNING.player.maxHp, value + perk.amount));
       addLog(`Perk chosen: ${perk.label}`);
     }
 
@@ -598,8 +594,6 @@ export default function useCombat() {
   /** Restart the fight against the current enemy */
   const restart = () => {
     setEnemyHp(TUNING.enemies[enemyIdx].hp);
-    setPlayerMaxHp(TUNING.player.maxHp);
-    setPlayerMaxMana(TUNING.player.maxMana);
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
     setPlayerShield(0);
@@ -647,8 +641,6 @@ export default function useCombat() {
       enemyIdx,
       enemyHp,
       enemyShield,
-      playerMaxHp,
-      playerMaxMana,
       playerHp,
       playerMana,
       playerShield,

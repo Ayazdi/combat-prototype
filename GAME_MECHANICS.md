@@ -30,8 +30,8 @@ After each enemy kill, the player receives the normal kill reward and must choos
 |---|---:|
 | Damage increase | +10% |
 | Defence increase | +10% |
-| Extra Mana | +15 max Mana and +15 current Mana |
-| Extra HP | +20 max HP and +20 current HP |
+| Extra Mana | +15 Mana, capped to max Mana |
+| Extra HP | +20 HP, capped to max HP |
 
 Perk values scale by kill number using `TUNING.rewardPerks.perEnemyGrowthRate`. With the default `0.2` growth, the second kill offers +12% damage or defence.
 
