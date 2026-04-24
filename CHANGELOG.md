@@ -6,6 +6,9 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Changed
+- Player shield now persists between turns and carries into the next enemy fight after a kill.
+
 ## [0.1.2] - 2026-04-24
 
 ### Added

@@ -18,6 +18,8 @@ A turn-based card-draft combat game. Each turn, the player picks tiles into a 5-
 
 Kill rewards are clamped to max HP and max Mana.
 
+Player shield persists between turns and across enemy kills until it is absorbed by damage or the run is restarted.
+
 ---
 
 ## Deck (Per Fight)
