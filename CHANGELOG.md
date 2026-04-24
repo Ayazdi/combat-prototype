@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+- Added card entry animations for board refills and committed hand slots.
+
+### Changed
+- Updated No Action cards with a heavier cement-block visual treatment.
+
 ## [0.1.4] - 2026-04-24
 
 ### Added

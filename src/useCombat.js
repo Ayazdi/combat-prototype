@@ -29,6 +29,12 @@ export default function useCombat() {
   const [picksUsed, setPicksUsed] = useState(0);
   const [pickLimit, setPickLimit] = useState(TUNING.draft.maxSequence);
   const [currentRow, setCurrentRow] = useState([]);
+  const [boardCardAnimationKeys, setBoardCardAnimationKeys] = useState(
+    Array.from({ length: TUNING.draft.rowSize }, () => 0),
+  );
+  const [committedCardAnimationKeys, setCommittedCardAnimationKeys] = useState(
+    Array.from({ length: TUNING.draft.maxSequence }, () => 0),
+  );
   const [rerollsUsedEnemy, setRerollsUsedEnemy] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
@@ -203,6 +209,7 @@ export default function useCombat() {
     setIncomingDamage(incoming);
     setEnemyTelegraph('');
     setCommitted([]);
+    setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
@@ -222,6 +229,7 @@ export default function useCombat() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDeck(newDeck);
     setCurrentRow(initialPool);
+    setBoardCardAnimationKeys(Array.from({ length: TUNING.draft.rowSize }, () => 0));
     setDeckShuffleCount(1);
     enemyIntentBagRef.current = [];
     setEnemyShield(0);
@@ -262,6 +270,11 @@ export default function useCombat() {
       return;
     }
     setCommitted(newCommitted);
+    setCommittedCardAnimationKeys((keys) => {
+      const next = [...keys];
+      next[placedIndex] = (next[placedIndex] || 0) + 1;
+      return next;
+    });
     // New picks become the currently selected committed tile.
     setSelectedCommittedIndex(placedIndex);
     setPicksUsed((v) => v + 1);
@@ -273,6 +286,11 @@ export default function useCombat() {
     const { card: newCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
     if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    setBoardCardAnimationKeys((keys) => {
+      const next = [...keys];
+      next[idx] = (next[idx] || 0) + 1;
+      return next;
+    });
     setCurrentRow((row) => {
       const next = [...row];
       next[idx] = newCard;
@@ -328,6 +346,7 @@ export default function useCombat() {
     setDeck(workingDeck);
     if (reshuffleHits > 0) setDeckShuffleCount((v) => v + reshuffleHits);
     setCurrentRow(newPool);
+    setBoardCardAnimationKeys((keys) => keys.map((key) => key + 1));
     setRerollsUsedEnemy((v) => v + 1);
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
@@ -392,6 +411,11 @@ export default function useCombat() {
     const { card: replacementCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
     if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    setBoardCardAnimationKeys((keys) => {
+      const next = [...keys];
+      next[index] = (next[index] || 0) + 1;
+      return next;
+    });
     setCurrentRow((row) => {
       const next = [...row];
       next[index] = replacementCard;
@@ -610,6 +634,8 @@ export default function useCombat() {
     const [newDeck, initialPool] = buildBattleDeck();
     setDeck(newDeck);
     setCurrentRow(initialPool);
+    setBoardCardAnimationKeys(Array.from({ length: TUNING.draft.rowSize }, () => 0));
+    setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setDeckShuffleCount(1);
     startTurn(1);
   };
@@ -654,6 +680,8 @@ export default function useCombat() {
       pickLimit,
       handSlotCount,
       currentRow,
+      boardCardAnimationKeys,
+      committedCardAnimationKeys,
       rerollsUsedEnemy,
       deckSize: deck.length,
       deckCounts,

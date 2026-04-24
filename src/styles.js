@@ -19,6 +19,10 @@ export const globalCss = `
     cursor: not-allowed;
     opacity: 0.55;
   }
+  .tile-card-enter {
+    animation: boardDealIn 0.34s cubic-bezier(0.18, 0.89, 0.32, 1.16);
+    transform-origin: 50% 80%;
+  }
   .tile-discard-btn {
     cursor: pointer;
     transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
@@ -58,6 +62,10 @@ export const globalCss = `
   .committed-slot-dragging {
     animation: dragPulse 0.45s ease-in-out infinite alternate;
   }
+  .committed-card-enter {
+    animation: handLandIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1.1);
+    transform-origin: 50% 100%;
+  }
 
   /* Victory / defeat overlay buttons */
   .overlay-btn {
@@ -76,6 +84,40 @@ export const globalCss = `
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes boardDealIn {
+    0% {
+      opacity: 0;
+      transform: translateY(-18px) rotateX(22deg) scale(0.9);
+      filter: brightness(1.35) saturate(0.9);
+    }
+    64% {
+      opacity: 1;
+      transform: translateY(3px) rotateX(0deg) scale(1.03);
+      filter: brightness(1.08) saturate(1);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) rotateX(0deg) scale(1);
+      filter: brightness(1) saturate(1);
+    }
+  }
+  @keyframes handLandIn {
+    0% {
+      opacity: 0;
+      transform: translateY(-28px) scale(0.82) rotate(-4deg);
+      filter: brightness(1.25);
+    }
+    70% {
+      opacity: 1;
+      transform: translateY(3px) scale(1.04) rotate(1deg);
+      filter: brightness(1.05);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotate(0deg);
+      filter: brightness(1);
+    }
   }
   @keyframes dragPulse {
     from { transform: scale(0.96); filter: brightness(0.95); }
@@ -288,7 +330,6 @@ export const styles = {
     gap: 8,
     fontFamily: '"Cinzel", serif',
     position: 'relative',
-    animation: 'fadeIn 0.3s ease-out',
     borderRadius: 2,
   },
   tileGlyph: { fontSize: 42, lineHeight: 1 },
