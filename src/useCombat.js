@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
 import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
+import { playSound } from './soundEffects';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -29,6 +30,12 @@ export default function useCombat() {
   const [picksUsed, setPicksUsed] = useState(0);
   const [pickLimit, setPickLimit] = useState(TUNING.draft.maxSequence);
   const [currentRow, setCurrentRow] = useState([]);
+  const [boardCardAnimationKeys, setBoardCardAnimationKeys] = useState(
+    Array.from({ length: TUNING.draft.rowSize }, () => 0),
+  );
+  const [committedCardAnimationKeys, setCommittedCardAnimationKeys] = useState(
+    Array.from({ length: TUNING.draft.maxSequence }, () => 0),
+  );
   const [rerollsUsedEnemy, setRerollsUsedEnemy] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
@@ -41,11 +48,13 @@ export default function useCombat() {
   const [incomingDamage, setIncomingDamage] = useState(0);
   const [enemyTelegraph, setEnemyTelegraph] = useState('');
   const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
+  const [combatBanner, setCombatBanner] = useState(null);
   const [victoryReward, setVictoryReward] = useState(null);
   const [selectedPerkKey, setSelectedPerkKey] = useState(null);
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
+  const combatBannerTimeoutRef = useRef(null);
   // Intent bag ensures 2:1 attack:defend ratio with random order.
   const enemyIntentBagRef = useRef([]);
 
@@ -57,6 +66,27 @@ export default function useCombat() {
 
   /** Append a line to the battle log */
   const addLog = (entry) => setLog((l) => [...l, entry]);
+
+  const showCombatBanner = (banner, duration = 0) => {
+    if (combatBannerTimeoutRef.current) {
+      clearTimeout(combatBannerTimeoutRef.current);
+      combatBannerTimeoutRef.current = null;
+    }
+    setCombatBanner({ ...banner, id: Date.now() });
+    if (duration > 0) {
+      combatBannerTimeoutRef.current = setTimeout(() => {
+        setCombatBanner(null);
+        combatBannerTimeoutRef.current = null;
+      }, duration);
+    }
+  };
+
+  const formatPlayerAction = (damage, block) => {
+    if (damage > 0 && block > 0) return `Player attacked ${damage} and shielded ${block}`;
+    if (damage > 0) return `Player attacked ${damage}`;
+    if (block > 0) return `Player shielded ${block}`;
+    return 'Player took no action';
+  };
 
   /** Return the deck composition for this battle, adjusted for the enemy passive. */
   const getBattleDeckComposition = () => {
@@ -202,7 +232,15 @@ export default function useCombat() {
 
     setIncomingDamage(incoming);
     setEnemyTelegraph('');
+    showCombatBanner({
+      eyebrow: 'Player Turn',
+      title: 'Your move',
+      detail: `Turn ${turnNum}`,
+      tone: 'player',
+    }, 1600);
+    playSound('playerTurn');
     setCommitted([]);
+    setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
@@ -222,6 +260,7 @@ export default function useCombat() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDeck(newDeck);
     setCurrentRow(initialPool);
+    setBoardCardAnimationKeys(Array.from({ length: TUNING.draft.rowSize }, () => 0));
     setDeckShuffleCount(1);
     enemyIntentBagRef.current = [];
     setEnemyShield(0);
@@ -262,6 +301,12 @@ export default function useCombat() {
       return;
     }
     setCommitted(newCommitted);
+    playSound('cardPick');
+    setCommittedCardAnimationKeys((keys) => {
+      const next = [...keys];
+      next[placedIndex] = (next[placedIndex] || 0) + 1;
+      return next;
+    });
     // New picks become the currently selected committed tile.
     setSelectedCommittedIndex(placedIndex);
     setPicksUsed((v) => v + 1);
@@ -273,6 +318,12 @@ export default function useCombat() {
     const { card: newCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
     if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    playSound('cardDeal');
+    setBoardCardAnimationKeys((keys) => {
+      const next = [...keys];
+      next[idx] = (next[idx] || 0) + 1;
+      return next;
+    });
     setCurrentRow((row) => {
       const next = [...row];
       next[idx] = newCard;
@@ -288,6 +339,7 @@ export default function useCombat() {
   const submitSequence = () => {
     if (phase !== 'drafting') return;
     if (committed.length === 0) return;
+    playSound('submit');
 
     const bestCombo = findBestAcceptedSequence(committed, {
       damageMultiplier: 1 + playerDamageBonusPct,
@@ -313,6 +365,7 @@ export default function useCombat() {
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
+    playSound('reroll');
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
     // Reroll intentionally does not change turn, round, picks used, or pick limit.
     const composition = getBattleDeckComposition();
@@ -328,6 +381,7 @@ export default function useCombat() {
     setDeck(workingDeck);
     if (reshuffleHits > 0) setDeckShuffleCount((v) => v + reshuffleHits);
     setCurrentRow(newPool);
+    setBoardCardAnimationKeys((keys) => keys.map((key) => key + 1));
     setRerollsUsedEnemy((v) => v + 1);
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
@@ -340,6 +394,7 @@ export default function useCombat() {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= committed.length) return;
     if (committed[index] === undefined || committed[index] === null) return;
+    playSound('cardPick');
     setSelectedCommittedIndex((prev) => (prev === index ? null : index));
   };
 
@@ -360,6 +415,7 @@ export default function useCombat() {
     if (playerMana < cost) return;
 
     setPlayerMana((m) => m - cost);
+    playSound('discard');
 
     setCommitted((c) => {
       const next = [...c];
@@ -387,11 +443,18 @@ export default function useCombat() {
     if (playerMana < cost) return;
 
     setPlayerMana((m) => m - cost);
+    playSound('discard');
 
     const composition = getBattleDeckComposition();
     const { card: replacementCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
     if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    playSound('cardDeal');
+    setBoardCardAnimationKeys((keys) => {
+      const next = [...keys];
+      next[index] = (next[index] || 0) + 1;
+      return next;
+    });
     setCurrentRow((row) => {
       const next = [...row];
       next[index] = replacementCard;
@@ -429,6 +492,7 @@ export default function useCombat() {
     });
 
     setSelectedCommittedIndex(null);
+    playSound('cardDeal');
   };
 
   // ----------------------------------------------------------
@@ -451,102 +515,146 @@ export default function useCombat() {
       })
       .join(' ');
 
-    // --- Shield gain (capped at max) ---
-    const shieldBefore = playerShield;
-    const shieldRaw = shieldBefore + block;
-    const shieldAfterGain = Math.min(TUNING.player.maxShield, shieldRaw);
-    const shieldWasted = shieldRaw - shieldAfterGain;
-
-    const logParts = [`T${turn}: ${seqStr} → ${damage} dmg`];
-    if (block > 0) {
-      if (shieldWasted > 0) {
-        logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${TUNING.player.maxShield})`);
-      } else {
-        logParts.push(`+${block} shield`);
-      }
-    }
-    addLog(logParts.join(' / '));
-
-    // --- Apply player damage to enemy (enemy shield absorbs first) ---
-    const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
-    const effectiveDamage = Math.max(0, damage - armoredReduction);
-    if (armoredReduction > 0) {
-      addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
-    }
-    const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
-    const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
-    const dealtToHp = effectiveDamage - enemyAbsorbed;
-    const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
-    if (enemyAbsorbed > 0) {
-      addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
-    }
-    setEnemyShield(enemyShieldAfterHit);
-    setEnemyHp(newEnemyHp);
-
-    if (newEnemyHp <= 0) {
-      const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
-      const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
-      setPlayerShield(shieldAfterGain);
-      setPlayerMana(manaAfterFoe);
-      setPlayerHp(hpAfterFoe);
-      setVictoryReward({
-        baseManaGain: TUNING.player.manaRegenPerFoe,
-        baseHpGain: TUNING.player.hpRegenPerFoe,
-        manaAfter: manaAfterFoe,
-        hpAfter: hpAfterFoe,
-        perks: buildPerkOptions(enemyIdx),
-      });
-      setSelectedPerkKey(null);
-      addLog(`✦ ${enemy.name} defeated`);
-      addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
-      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
-      setPhase('victory');
-      return;
-    }
-
-    // --- Enemy executes current intent (attack or defend) ---
-    const currentIntent = enemyIntentQueue[0] || { type: 'attack', amount: incomingDamage };
-    let shieldAfterEnemyAction = enemyShieldAfterHit;
-    let newPlayerHp = playerHp;
-
-    if (currentIntent.type === 'defend') {
-      shieldAfterEnemyAction += currentIntent.amount;
-      setEnemyShield(shieldAfterEnemyAction);
-      addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
-    } else {
-      const rawDmg = currentIntent.amount;
-      const absorbed = Math.min(shieldAfterGain, rawDmg);
-      const shieldAfterHit = shieldAfterGain - absorbed;
-      const taken = rawDmg - absorbed;
-      newPlayerHp = Math.max(0, playerHp - taken);
-
-      if (absorbed > 0) {
-        addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
-      } else {
-        addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
-      }
-      setPlayerShield(shieldAfterHit);
-    }
-
-    if (currentIntent.type === 'defend') {
-      setPlayerShield(shieldAfterGain);
-    }
-    setPlayerHp(newPlayerHp);
-
-    if (newPlayerHp <= 0) {
-      addLog('✖ You fell in battle');
-      setPhase('defeat');
-      return;
-    }
-
-    // Advance to the next turn after a brief pause
     setTimeout(() => {
-      const nextTurn = turn + 1;
-      const nextQueue = buildIntentQueue(nextTurn, enemyIntentQueue.slice(1));
-      setEnemyIntentQueue(nextQueue);
-      setTurn(nextTurn);
-      startTurn(nextTurn, nextQueue);
-    }, 1200);
+      // --- Shield gain (capped at max) ---
+      const shieldBefore = playerShield;
+      const shieldRaw = shieldBefore + block;
+      const shieldAfterGain = Math.min(TUNING.player.maxShield, shieldRaw);
+      const shieldWasted = shieldRaw - shieldAfterGain;
+
+      const logParts = [`T${turn}: ${seqStr} → ${damage} dmg`];
+      if (block > 0) {
+        if (shieldWasted > 0) {
+          logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${TUNING.player.maxShield})`);
+        } else {
+          logParts.push(`+${block} shield`);
+        }
+      }
+      addLog(logParts.join(' / '));
+      showCombatBanner({
+        eyebrow: 'Player Action',
+        title: formatPlayerAction(damage, block),
+        detail: seqStr || 'No combo resolved',
+        tone: 'player',
+      });
+      if (finalSequence.length >= 2) playSound('combo');
+      if (damage > 0) playSound('attack');
+      if (block > 0) playSound('defence');
+
+      // --- Apply player damage to enemy (enemy shield absorbs first) ---
+      const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
+      const effectiveDamage = Math.max(0, damage - armoredReduction);
+      if (armoredReduction > 0) {
+        addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
+      }
+      const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
+      const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
+      const dealtToHp = effectiveDamage - enemyAbsorbed;
+      const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
+      if (enemyAbsorbed > 0) {
+        addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
+      }
+      setPlayerShield(shieldAfterGain);
+      setEnemyShield(enemyShieldAfterHit);
+      setEnemyHp(newEnemyHp);
+
+      if (newEnemyHp <= 0) {
+        setTimeout(() => {
+          const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
+          const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
+          setPlayerMana(manaAfterFoe);
+          setPlayerHp(hpAfterFoe);
+          setVictoryReward({
+            baseManaGain: TUNING.player.manaRegenPerFoe,
+            baseHpGain: TUNING.player.hpRegenPerFoe,
+            manaAfter: manaAfterFoe,
+            hpAfter: hpAfterFoe,
+            perks: buildPerkOptions(enemyIdx),
+          });
+          setSelectedPerkKey(null);
+          setCombatBanner(null);
+          playSound('victory');
+          addLog(`✦ ${enemy.name} defeated`);
+          addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
+          addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
+          setPhase('victory');
+        }, 1300);
+        return;
+      }
+
+      // --- Enemy executes current intent (attack or defend) ---
+      const currentIntent = enemyIntentQueue[0] || { type: 'attack', amount: incomingDamage };
+
+      setTimeout(() => {
+        showCombatBanner({
+          eyebrow: 'Enemy Turn',
+          title: `${enemy.name} prepares`,
+          detail: currentIntent.text,
+          tone: 'enemy',
+        });
+        playSound('enemyTurn');
+      }, 1000);
+
+      setTimeout(() => {
+        let shieldAfterEnemyAction = enemyShieldAfterHit;
+        let newPlayerHp = playerHp;
+
+        if (currentIntent.type === 'defend') {
+          shieldAfterEnemyAction += currentIntent.amount;
+          setEnemyShield(shieldAfterEnemyAction);
+          setPlayerShield(shieldAfterGain);
+          addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
+          showCombatBanner({
+            eyebrow: enemy.name,
+            title: `Shield +${currentIntent.amount}`,
+            detail: `Shield total ${shieldAfterEnemyAction}`,
+            tone: 'enemy',
+          });
+          playSound('enemyDefend');
+        } else {
+          const rawDmg = currentIntent.amount;
+          const absorbed = Math.min(shieldAfterGain, rawDmg);
+          const shieldAfterHit = shieldAfterGain - absorbed;
+          const taken = rawDmg - absorbed;
+          newPlayerHp = Math.max(0, playerHp - taken);
+
+          if (absorbed > 0) {
+            addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+          } else {
+            addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
+          }
+          setPlayerShield(shieldAfterHit);
+          showCombatBanner({
+            eyebrow: enemy.name,
+            title: `Attack ${rawDmg} damage`,
+            detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
+            tone: 'enemy',
+          });
+          playSound('enemyAttack');
+        }
+
+        setPlayerHp(newPlayerHp);
+
+        if (newPlayerHp <= 0) {
+          setTimeout(() => {
+            setCombatBanner(null);
+            playSound('defeat');
+            addLog('✖ You fell in battle');
+            setPhase('defeat');
+          }, 1200);
+          return;
+        }
+
+        // Advance to the next turn after the outcome banner has had time to land.
+        setTimeout(() => {
+          const nextTurn = turn + 1;
+          const nextQueue = buildIntentQueue(nextTurn, enemyIntentQueue.slice(1));
+          setEnemyIntentQueue(nextQueue);
+          setTurn(nextTurn);
+          startTurn(nextTurn, nextQueue);
+        }, 1400);
+      }, 2200);
+    }, 250);
   };
 
   // ----------------------------------------------------------
@@ -572,6 +680,7 @@ export default function useCombat() {
       addLog(`Perk chosen: ${perk.label}`);
     }
 
+    playSound('perk');
     setSelectedPerkKey(key);
   };
 
@@ -579,6 +688,7 @@ export default function useCombat() {
   const nextEnemy = () => {
     if (!selectedPerkKey) return;
     if (enemyIdx < TUNING.enemies.length - 1) {
+      playSound('submit');
       const next = enemyIdx + 1;
       setEnemyIdx(next);
       setEnemyHp(TUNING.enemies[next].hp);
@@ -593,6 +703,7 @@ export default function useCombat() {
 
   /** Restart the fight against the current enemy */
   const restart = () => {
+    playSound('submit');
     setEnemyHp(TUNING.enemies[enemyIdx].hp);
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
@@ -610,6 +721,8 @@ export default function useCombat() {
     const [newDeck, initialPool] = buildBattleDeck();
     setDeck(newDeck);
     setCurrentRow(initialPool);
+    setBoardCardAnimationKeys(Array.from({ length: TUNING.draft.rowSize }, () => 0));
+    setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setDeckShuffleCount(1);
     startTurn(1);
   };
@@ -654,6 +767,8 @@ export default function useCombat() {
       pickLimit,
       handSlotCount,
       currentRow,
+      boardCardAnimationKeys,
+      committedCardAnimationKeys,
       rerollsUsedEnemy,
       deckSize: deck.length,
       deckCounts,
@@ -669,6 +784,7 @@ export default function useCombat() {
       discardCost,
       sequenceValid,
       sequenceFull,
+      combatBanner,
       victoryReward,
       selectedPerkKey,
       logEndRef,

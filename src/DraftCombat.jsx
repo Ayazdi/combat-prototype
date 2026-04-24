@@ -7,6 +7,7 @@ import Combatants from './components/Combatants';
 import DraftArea from './components/DraftArea';
 import CommittedSequence from './components/CommittedSequence';
 import CombatLog from './components/CombatLog';
+import CombatBanner from './components/CombatBanner';
 import ResultOverlay from './components/ResultOverlay';
 
 // ============================================================
@@ -46,6 +47,7 @@ export default function DraftCombat() {
         <DraftArea
           phase={state.phase}
           currentRow={state.currentRow}
+          boardCardAnimationKeys={state.boardCardAnimationKeys}
           rerollsLeftEnemy={state.rerollsLeftEnemy}
           playerMana={state.playerMana}
           discardCost={state.discardCost}
@@ -69,6 +71,7 @@ export default function DraftCombat() {
         {/* Committed tile sequence + live damage/block preview */}
         <CommittedSequence
           committed={state.committed}
+          committedCardAnimationKeys={state.committedCardAnimationKeys}
           slotCount={state.handSlotCount}
           preview={state.preview}
           selectedCommittedIndex={state.selectedCommittedIndex}
@@ -78,6 +81,8 @@ export default function DraftCombat() {
 
         {/* Scrollable battle log */}
         <CombatLog log={state.log} logEndRef={state.logEndRef} />
+
+        <CombatBanner banner={state.combatBanner} />
 
         {/* Victory / defeat full-screen overlay */}
         <ResultOverlay

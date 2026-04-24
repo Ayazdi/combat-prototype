@@ -16,6 +16,7 @@ import { tileGlyph, tileLabel, tileStyle } from '../tileHelpers';
 export default function DraftArea({
   phase,
   currentRow,
+  boardCardAnimationKeys,
   rerollsLeftEnemy,
   playerMana,
   discardCost,
@@ -74,10 +75,11 @@ export default function DraftArea({
         {currentRow.map((tile, i) => (
           <div key={i} style={styles.tileWrap}>
             <button
+              key={`${i}-${boardCardAnimationKeys?.[i] ?? 0}`}
               onClick={() => onPickTile(i)}
               disabled={pickDisabled}
               style={{ ...styles.tile, ...tileStyle(tile) }}
-              className="tile-btn"
+              className="tile-btn tile-card-enter"
             >
               <div style={styles.tileGlyph}>{tileGlyph(tile)}</div>
               <div style={styles.tileLabel}>{tileLabel(tile)}</div>

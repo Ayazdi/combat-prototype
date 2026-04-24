@@ -58,6 +58,6 @@ export const TUNING = {
     { id: 3, name: 'Mage', hp: 230, attack: 30, defend: 20, ability: 'empty_plus' },
     { id: 4, name: 'Knight', hp: 320, attack: 35, defend: 25, ability: 'armored' },
     { id: 5, name: 'Warden', hp: 280, attack: 38, defend: 30, ability: 'adaptive' },
-    { id: 6, name: 'Witch', hp: 260, attack: 42, defend: 35, ability: 'double_discard' },
+    { id: 6, name: 'Witch', hp: 300, attack: 42, defend: 35, ability: 'double_discard' },
   ],
 };

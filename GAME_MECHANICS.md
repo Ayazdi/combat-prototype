@@ -48,6 +48,7 @@ Each battle starts with a fresh shuffled 40-card deck:
 | No Action (E) | 18 |
 
 Board shows 8 tiles. When you pick one, that slot is immediately refilled from the same battle deck.
+No Action cards are blocker cards and use a cement-like visual treatment.
 
 ---
 

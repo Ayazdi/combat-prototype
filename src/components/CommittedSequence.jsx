@@ -9,6 +9,7 @@ import { tileGlyph, tileStyle } from '../tileHelpers';
 // ============================================================
 export default function CommittedSequence({
   committed,
+  committedCardAnimationKeys,
   slotCount,
   preview,
   selectedCommittedIndex,
@@ -49,7 +50,7 @@ export default function CommittedSequence({
           const isDragging = draggingIndex === i;
           return (
             <button
-              key={i}
+              key={`${i}-${committedCardAnimationKeys?.[i] ?? 0}`}
               type="button"
               onClick={() => isCard && onSelectCommittedTile(i)}
               disabled={!isCard}
@@ -84,7 +85,7 @@ export default function CommittedSequence({
                 ...(canDropHere ? styles.committedDropTarget : {}),
                 ...(isDragging ? styles.committedDragging : {}),
               }}
-              className={`committed-slot-btn${isDragging ? ' committed-slot-dragging' : ''}`}
+              className={`committed-slot-btn${isCard ? ' committed-card-enter' : ''}${isDragging ? ' committed-slot-dragging' : ''}`}
             >
               {!isEmptyCell ? (
                 tileGlyph(tile)
