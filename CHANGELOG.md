@@ -9,6 +9,7 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 ### Added
 - Added card entry animations for board refills and committed hand slots.
 - Added epic combat banners for turn starts, player outcomes, and enemy outcomes.
+- Added generated sound effects for cards, rerolls, discards, combat actions, perks, victory, and defeat.
 
 ### Changed
 - Player turn banners now appear at the start of each draft turn instead of after submitting an action.

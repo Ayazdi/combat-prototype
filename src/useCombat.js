@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
 import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
+import { playSound } from './soundEffects';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -237,6 +238,7 @@ export default function useCombat() {
       detail: `Turn ${turnNum}`,
       tone: 'player',
     }, 1600);
+    playSound('playerTurn');
     setCommitted([]);
     setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setSelectedCommittedIndex(null);
@@ -299,6 +301,7 @@ export default function useCombat() {
       return;
     }
     setCommitted(newCommitted);
+    playSound('cardPick');
     setCommittedCardAnimationKeys((keys) => {
       const next = [...keys];
       next[placedIndex] = (next[placedIndex] || 0) + 1;
@@ -315,6 +318,7 @@ export default function useCombat() {
     const { card: newCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
     if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    playSound('cardDeal');
     setBoardCardAnimationKeys((keys) => {
       const next = [...keys];
       next[idx] = (next[idx] || 0) + 1;
@@ -335,6 +339,7 @@ export default function useCombat() {
   const submitSequence = () => {
     if (phase !== 'drafting') return;
     if (committed.length === 0) return;
+    playSound('submit');
 
     const bestCombo = findBestAcceptedSequence(committed, {
       damageMultiplier: 1 + playerDamageBonusPct,
@@ -360,6 +365,7 @@ export default function useCombat() {
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
     if (playerMana < TUNING.draft.rerollCost) return;
     setPlayerMana((m) => m - TUNING.draft.rerollCost);
+    playSound('reroll');
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
     // Reroll intentionally does not change turn, round, picks used, or pick limit.
     const composition = getBattleDeckComposition();
@@ -388,6 +394,7 @@ export default function useCombat() {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= committed.length) return;
     if (committed[index] === undefined || committed[index] === null) return;
+    playSound('cardPick');
     setSelectedCommittedIndex((prev) => (prev === index ? null : index));
   };
 
@@ -408,6 +415,7 @@ export default function useCombat() {
     if (playerMana < cost) return;
 
     setPlayerMana((m) => m - cost);
+    playSound('discard');
 
     setCommitted((c) => {
       const next = [...c];
@@ -435,11 +443,13 @@ export default function useCombat() {
     if (playerMana < cost) return;
 
     setPlayerMana((m) => m - cost);
+    playSound('discard');
 
     const composition = getBattleDeckComposition();
     const { card: replacementCard, deck: updatedDeck, reshuffled } = drawFromDeck(deck, composition);
     setDeck(updatedDeck);
     if (reshuffled) setDeckShuffleCount((v) => v + 1);
+    playSound('cardDeal');
     setBoardCardAnimationKeys((keys) => {
       const next = [...keys];
       next[index] = (next[index] || 0) + 1;
@@ -482,6 +492,7 @@ export default function useCombat() {
     });
 
     setSelectedCommittedIndex(null);
+    playSound('cardDeal');
   };
 
   // ----------------------------------------------------------
@@ -526,6 +537,9 @@ export default function useCombat() {
         detail: seqStr || 'No combo resolved',
         tone: 'player',
       });
+      if (finalSequence.length >= 2) playSound('combo');
+      if (damage > 0) playSound('attack');
+      if (block > 0) playSound('defence');
 
       // --- Apply player damage to enemy (enemy shield absorbs first) ---
       const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
@@ -559,6 +573,7 @@ export default function useCombat() {
           });
           setSelectedPerkKey(null);
           setCombatBanner(null);
+          playSound('victory');
           addLog(`✦ ${enemy.name} defeated`);
           addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
           addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
@@ -577,6 +592,7 @@ export default function useCombat() {
           detail: currentIntent.text,
           tone: 'enemy',
         });
+        playSound('enemyTurn');
       }, 1000);
 
       setTimeout(() => {
@@ -594,6 +610,7 @@ export default function useCombat() {
             detail: `Shield total ${shieldAfterEnemyAction}`,
             tone: 'enemy',
           });
+          playSound('enemyDefend');
         } else {
           const rawDmg = currentIntent.amount;
           const absorbed = Math.min(shieldAfterGain, rawDmg);
@@ -613,6 +630,7 @@ export default function useCombat() {
             detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
             tone: 'enemy',
           });
+          playSound('enemyAttack');
         }
 
         setPlayerHp(newPlayerHp);
@@ -620,6 +638,7 @@ export default function useCombat() {
         if (newPlayerHp <= 0) {
           setTimeout(() => {
             setCombatBanner(null);
+            playSound('defeat');
             addLog('✖ You fell in battle');
             setPhase('defeat');
           }, 1200);
@@ -661,6 +680,7 @@ export default function useCombat() {
       addLog(`Perk chosen: ${perk.label}`);
     }
 
+    playSound('perk');
     setSelectedPerkKey(key);
   };
 
@@ -668,6 +688,7 @@ export default function useCombat() {
   const nextEnemy = () => {
     if (!selectedPerkKey) return;
     if (enemyIdx < TUNING.enemies.length - 1) {
+      playSound('submit');
       const next = enemyIdx + 1;
       setEnemyIdx(next);
       setEnemyHp(TUNING.enemies[next].hp);
@@ -682,6 +703,7 @@ export default function useCombat() {
 
   /** Restart the fight against the current enemy */
   const restart = () => {
+    playSound('submit');
     setEnemyHp(TUNING.enemies[enemyIdx].hp);
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
