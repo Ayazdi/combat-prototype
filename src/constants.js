@@ -10,6 +10,7 @@ export const TUNING = {
     hpRegenPerFoe: 20,
     startingMana: 100,
   },
+  spells: { maxCastsPerTurn: 1 },
   rewardPerks: {
     // Scales perk values by kill number. 0.2 makes the second kill's 10% perk become 12%.
     perEnemyGrowthRate: 0.2,
