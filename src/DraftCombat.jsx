@@ -5,6 +5,7 @@ import { styles, globalCss } from './styles';
 import Header from './components/Header';
 import Combatants from './components/Combatants';
 import DraftArea from './components/DraftArea';
+import SpellsPanel from './components/SpellsPanel';
 import CommittedSequence from './components/CommittedSequence';
 import CombatLog from './components/CombatLog';
 import CombatBanner from './components/CombatBanner';
@@ -66,6 +67,15 @@ export default function DraftCombat() {
           onDiscardSelected={actions.discardSelected}
           onDiscardBoardTile={actions.discardBoardTile}
           onSubmit={actions.submitSequence}
+        />
+
+        {/* Spells panel — shown only when the player owns at least one spell */}
+        <SpellsPanel
+          playerSpells={state.playerSpells}
+          playerMana={state.playerMana}
+          spellsCastThisTurn={state.spellsCastThisTurn}
+          phase={state.phase}
+          onCast={actions.castSpell}
         />
 
         {/* Committed tile sequence + live damage/block preview */}

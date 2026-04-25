@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { TUNING } from './constants';
 import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
 import { playSound } from './soundEffects';
+import { PLAYER_SPELLS, getSpell } from './spells';
 
 // ============================================================
 // useCombat — encapsulates every piece of combat state and
@@ -21,6 +22,10 @@ export default function useCombat() {
   const [playerDefenceBonusPct, setPlayerDefenceBonusPct] = useState(0);
   const [enemyHp, setEnemyHp] = useState(TUNING.enemies[0].hp);
   const [enemyShield, setEnemyShield] = useState(0);
+
+  // --- Spells ---
+  const [playerSpells, setPlayerSpells] = useState([]);
+  const [spellsCastThisTurn, setSpellsCastThisTurn] = useState(0);
 
   // --- Turn / draft tracking ---
   const [turn, setTurn] = useState(1);
@@ -132,14 +137,14 @@ export default function useCombat() {
     return `${Math.round(value * 100)}%`;
   };
 
-  const buildPerkOptions = (defeatedEnemyIndex) => {
+  const buildPerkOptions = (defeatedEnemyIndex, ownedSpells = []) => {
     const scale = getPerkScale(defeatedEnemyIndex);
     const damageIncrease = TUNING.rewardPerks.damageIncreaseBase * scale;
     const defenceIncrease = TUNING.rewardPerks.defenceIncreaseBase * scale;
     const manaBonus = Math.round(TUNING.rewardPerks.manaBonusBase * scale);
     const hpBonus = Math.round(TUNING.rewardPerks.hpBonusBase * scale);
 
-    return [
+    const statPerks = [
       {
         key: 'damage',
         label: `+${formatPercent(damageIncrease)} Damage`,
@@ -165,6 +170,23 @@ export default function useCombat() {
         amount: hpBonus,
       },
     ];
+
+    const available = PLAYER_SPELLS.filter((s) => !ownedSpells.includes(s.id));
+    if (available.length > 0) {
+      const spell = available[Math.floor(Math.random() * available.length)];
+      const spellPerk = {
+        key: `spell:${spell.id}`,
+        kind: 'spell',
+        spellId: spell.id,
+        label: spell.name,
+        detail: spell.description,
+      };
+      // Shuffle statPerks, take 3, put the spell first → 4 total options
+      const shuffled = [...statPerks].sort(() => Math.random() - 0.5);
+      return [spellPerk, ...shuffled.slice(0, 3)];
+    }
+
+    return statPerks;
   };
 
   /** Enemy defend amount is explicit per enemy definition. */
@@ -246,6 +268,7 @@ export default function useCombat() {
     setPickLimit(TUNING.draft.maxSequence);
     if (turnNum === 1) setRerollsUsedEnemy(0);
     setRound(1);
+    setSpellsCastThisTurn(0);
     setPhase('drafting');
   };
 
@@ -264,6 +287,7 @@ export default function useCombat() {
     setDeckShuffleCount(1);
     enemyIntentBagRef.current = [];
     setEnemyShield(0);
+    setSpellsCastThisTurn(0);
     const initialQueue = buildIntentQueue(1);
     setEnemyIntentQueue(initialQueue);
     startTurn(1, initialQueue);
@@ -496,6 +520,71 @@ export default function useCombat() {
   };
 
   // ----------------------------------------------------------
+  // Spell casting
+  // ----------------------------------------------------------
+
+  /**
+   * Helper used by both resolveTurn and castSpell to trigger victory sequence.
+   * Receives the mana value at the time of the kill (before regen) so it can
+   * compute the post-foe mana correctly.
+   */
+  const triggerVictory = (currentMana, currentHp) => {
+    setTimeout(() => {
+      const manaAfterFoe = Math.min(TUNING.player.maxMana, currentMana + TUNING.player.manaRegenPerFoe);
+      const hpAfterFoe = Math.min(TUNING.player.maxHp, currentHp + TUNING.player.hpRegenPerFoe);
+      setPlayerMana(manaAfterFoe);
+      setPlayerHp(hpAfterFoe);
+      setVictoryReward({
+        baseManaGain: TUNING.player.manaRegenPerFoe,
+        baseHpGain: TUNING.player.hpRegenPerFoe,
+        manaAfter: manaAfterFoe,
+        hpAfter: hpAfterFoe,
+        perks: buildPerkOptions(enemyIdx, playerSpells),
+      });
+      setSelectedPerkKey(null);
+      setCombatBanner(null);
+      playSound('victory');
+      addLog(`✦ ${enemy.name} defeated`);
+      addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
+      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
+      setPhase('victory');
+    }, 1300);
+  };
+
+  const castSpell = (spellId) => {
+    if (phase !== 'drafting') return;
+    if (spellsCastThisTurn >= TUNING.spells.maxCastsPerTurn) return;
+    if (!playerSpells.includes(spellId)) return;
+    const spell = getSpell(spellId);
+    if (!spell) return;
+    if (playerMana < spell.manaCost) return;
+
+    const newMana = playerMana - spell.manaCost;
+    setPlayerMana(newMana);
+
+    const armoredReduction = enemy.ability === 'armored' ? 10 : 0;
+    const effectiveDamage = Math.max(0, spell.damage - armoredReduction);
+    const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
+    const newEnemyShield = enemyShield - enemyAbsorbed;
+    const dealtToHp = effectiveDamage - enemyAbsorbed;
+    const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
+
+    setEnemyShield(newEnemyShield);
+    setEnemyHp(newEnemyHp);
+    setSpellsCastThisTurn((v) => v + 1);
+
+    addLog(`T${turn}: cast ${spell.name} → ${dealtToHp} dmg`);
+    if (enemyAbsorbed > 0) {
+      addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
+    }
+    playSound('attack');
+
+    if (newEnemyHp <= 0) {
+      triggerVictory(newMana, playerHp);
+    }
+  };
+
+  // ----------------------------------------------------------
   // Resolution — apply damage, shields, check win/loss
   // ----------------------------------------------------------
   const resolveTurn = (finalSequence) => {
@@ -559,26 +648,7 @@ export default function useCombat() {
       setEnemyHp(newEnemyHp);
 
       if (newEnemyHp <= 0) {
-        setTimeout(() => {
-          const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
-          const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
-          setPlayerMana(manaAfterFoe);
-          setPlayerHp(hpAfterFoe);
-          setVictoryReward({
-            baseManaGain: TUNING.player.manaRegenPerFoe,
-            baseHpGain: TUNING.player.hpRegenPerFoe,
-            manaAfter: manaAfterFoe,
-            hpAfter: hpAfterFoe,
-            perks: buildPerkOptions(enemyIdx),
-          });
-          setSelectedPerkKey(null);
-          setCombatBanner(null);
-          playSound('victory');
-          addLog(`✦ ${enemy.name} defeated`);
-          addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
-          addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
-          setPhase('victory');
-        }, 1300);
+        triggerVictory(playerMana, playerHp);
         return;
       }
 
@@ -666,7 +736,10 @@ export default function useCombat() {
     const perk = victoryReward.perks.find((option) => option.key === key);
     if (!perk) return;
 
-    if (perk.key === 'damage') {
+    if (perk.kind === 'spell') {
+      setPlayerSpells((s) => [...s, perk.spellId]);
+      addLog(`Spell learned: ${perk.label}`);
+    } else if (perk.key === 'damage') {
       setPlayerDamageBonusPct((value) => value + perk.amount);
       addLog(`Perk chosen: ${perk.label}`);
     } else if (perk.key === 'defence') {
@@ -717,6 +790,8 @@ export default function useCombat() {
     setSelectedCommittedIndex(null);
     setVictoryReward(null);
     setSelectedPerkKey(null);
+    setPlayerSpells([]);
+    setSpellsCastThisTurn(0);
     // Rebuild the deck and pool for this fight.
     const [newDeck, initialPool] = buildBattleDeck();
     setDeck(newDeck);
@@ -788,6 +863,8 @@ export default function useCombat() {
       victoryReward,
       selectedPerkKey,
       logEndRef,
+      playerSpells,
+      spellsCastThisTurn,
     },
     actions: {
       pickTile,
@@ -800,6 +877,7 @@ export default function useCombat() {
       submitSequence,
       nextEnemy,
       restart,
+      castSpell,
     },
   };
 }
