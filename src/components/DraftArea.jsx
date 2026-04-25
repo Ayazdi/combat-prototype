@@ -1,5 +1,6 @@
 import { styles } from '../styles';
 import { tileGlyph, tileLabel, tileStyle } from '../tileHelpers';
+import { TUNING } from '../constants';
 
 // ============================================================
 // DraftArea — the main drafting interface.
@@ -18,6 +19,7 @@ export default function DraftArea({
   boardCardAnimationKeys,
   rerollsLeftEnemy,
   discardsLeftEnemy,
+  playerMana,
   deckSize,
   deckCounts,
   deckShuffleCount,
@@ -34,17 +36,18 @@ export default function DraftArea({
   onDiscardBoardTile,
   onSubmit,
 }) {
-  const rerollDisabled = phase !== 'drafting' || rerollsLeftEnemy <= 0;
+  const rerollDisabled = phase !== 'drafting' || rerollsLeftEnemy <= 0 || playerMana < TUNING.draft.rerollManaCost;
 
   const discardDisabled =
     phase !== 'drafting' ||
     committedLength === 0 ||
     selectedCommittedIndex === null ||
-    discardsLeftEnemy <= 0;
+    discardsLeftEnemy <= 0 ||
+    playerMana < TUNING.draft.discardManaCost;
 
   // Can't pick more tiles once we hit the max
   const pickDisabled = phase !== 'drafting' || sequenceFull;
-  const boardDiscardDisabled = phase !== 'drafting' || discardsLeftEnemy <= 0;
+  const boardDiscardDisabled = phase !== 'drafting' || discardsLeftEnemy <= 0 || playerMana < TUNING.draft.discardManaCost;
 
   // Submit requires at least 1 tile committed
   const submitDisabled = phase !== 'drafting' || committedLength === 0;
@@ -123,7 +126,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>↻</span>
           <span>REROLL ({rerollsLeftEnemy}/1)</span>
-          <span style={styles.ctrlCost}>FREE • {rerollsLeftEnemy} LEFT</span>
+          <span style={styles.ctrlCost}>{TUNING.draft.rerollManaCost} MP • {rerollsLeftEnemy} LEFT</span>
         </button>
 
         <button
@@ -137,7 +140,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>✕</span>
           <span>DISCARD SELECTED</span>
-          <span style={styles.ctrlCost}>FREE • {discardsLeftEnemy} LEFT</span>
+          <span style={styles.ctrlCost}>{TUNING.draft.discardManaCost} MP • {discardsLeftEnemy} LEFT</span>
         </button>
 
         {/* SUBMIT — highlighted green when the sequence is valid */}

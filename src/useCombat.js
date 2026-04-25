@@ -25,6 +25,7 @@ export default function useCombat() {
 
   // --- Spells ---
   const [playerSpells, setPlayerSpells] = useState([]);
+  const [playerAbilityComboIds, setPlayerAbilityComboIds] = useState([TUNING.startingAbilityComboId]);
   const [spellsCastThisTurn, setSpellsCastThisTurn] = useState(0);
 
   // --- Turn / draft tracking ---
@@ -56,7 +57,7 @@ export default function useCombat() {
   const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
   const [combatBanner, setCombatBanner] = useState(null);
   const [victoryReward, setVictoryReward] = useState(null);
-  const [selectedPerkKey, setSelectedPerkKey] = useState(null);
+  const [selectedRewardKeys, setSelectedRewardKeys] = useState([]);
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
@@ -101,6 +102,7 @@ export default function useCombat() {
     playerMaxMana: TUNING.player.maxMana,
     enemyHp,
     enemyMaxHp: enemy.hp,
+    unlockedAbilityIds: playerAbilityComboIds,
   });
 
   /** Return the deck composition for this battle, adjusted for the enemy passive. */
@@ -140,7 +142,7 @@ export default function useCombat() {
     return `${Math.round(value * 100)}%`;
   };
 
-  const buildPerkOptions = (defeatedEnemyIndex, ownedSpells = []) => {
+  const buildPerkOptions = (defeatedEnemyIndex, ownedSpells = [], ownedAbilityComboIds = []) => {
     const scale = getPerkScale(defeatedEnemyIndex);
     const damageIncrease = TUNING.rewardPerks.damageIncreaseBase * scale;
     const defenceIncrease = TUNING.rewardPerks.defenceIncreaseBase * scale;
@@ -174,6 +176,18 @@ export default function useCombat() {
       },
     ];
 
+    const availableAbilities = TUNING.comboAbilities
+      .filter((combo) => !ownedAbilityComboIds.includes(combo.id))
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3)
+      .map((combo) => ({
+        key: `ability:${combo.id}`,
+        kind: 'ability',
+        abilityId: combo.id,
+        label: `${combo.pattern} ${combo.name}`,
+        detail: combo.manaCost > 0 ? `${combo.detail} Cost: ${combo.manaCost} MP` : combo.detail,
+      }));
+
     const available = PLAYER_SPELLS.filter((s) => !ownedSpells.includes(s.id));
     if (available.length > 0) {
       const spell = available[Math.floor(Math.random() * available.length)];
@@ -186,10 +200,10 @@ export default function useCombat() {
       };
       // Shuffle statPerks, take 3, put the spell first → 4 total options
       const shuffled = [...statPerks].sort(() => Math.random() - 0.5);
-      return [spellPerk, ...shuffled.slice(0, 3)];
+      return [...availableAbilities, spellPerk, ...shuffled.slice(0, 3)];
     }
 
-    return statPerks;
+    return [...availableAbilities, ...statPerks];
   };
 
   /** Enemy defend amount is explicit per enemy definition. */
@@ -269,7 +283,8 @@ export default function useCombat() {
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
-    if (turnNum === 1) { setRerollsUsedEnemy(0); setDiscardsUsedEnemy(0); }
+    if (turnNum === 1) setRerollsUsedEnemy(0);
+    setDiscardsUsedEnemy(0);
     setRound(1);
     setSpellsCastThisTurn(0);
     setPhase('drafting');
@@ -384,10 +399,12 @@ export default function useCombat() {
     }
   };
 
-  /** Reroll the board without ending the turn or spending a pick. Free, limited per enemy. */
+  /** Reroll the board without ending the turn or spending a pick. Costs mana, limited per enemy. */
   const reroll = () => {
     if (phase !== 'drafting') return;
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
+    if (playerMana < TUNING.draft.rerollManaCost) return;
+    setPlayerMana((mana) => mana - TUNING.draft.rerollManaCost);
     playSound('reroll');
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
     // Reroll intentionally does not change turn, round, picks used, or pick limit.
@@ -406,6 +423,7 @@ export default function useCombat() {
     setCurrentRow(newPool);
     setBoardCardAnimationKeys((keys) => keys.map((key) => key + 1));
     setRerollsUsedEnemy((v) => v + 1);
+    addLog(`T${turn}: reroll board (-${TUNING.draft.rerollManaCost} MP)`);
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
       addLog(`  ${enemy.name} adapts: +25 shield (reroll)`);
@@ -422,7 +440,7 @@ export default function useCombat() {
   };
 
   /**
-   * Permanently discard one selected committed tile (free, limited per enemy).
+   * Permanently discard one selected committed tile (mana cost, limited per turn).
    * Discard grants +1 extra selection budget this turn.
    */
   const discardSelected = () => {
@@ -434,10 +452,12 @@ export default function useCombat() {
     const discardedCard = committed[discardIndex];
     if (discardedCard === undefined || discardedCard === null) return;
 
-    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerEnemy;
+    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerTurn;
     if (discardsUsedEnemy >= maxDiscards) return;
+    if (playerMana < TUNING.draft.discardManaCost) return;
 
     setDiscardsUsedEnemy((v) => v + 1);
+    setPlayerMana((mana) => mana - TUNING.draft.discardManaCost);
     playSound('discard');
 
     setCommitted((c) => {
@@ -450,22 +470,25 @@ export default function useCombat() {
     // Discard allows one additional pick this turn.
     setPickLimit((limit) => limit + 1);
     setSelectedCommittedIndex(null);
+    addLog(`T${turn}: discard committed ${discardedCard} (-${TUNING.draft.discardManaCost} MP)`);
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
       addLog(`  ${enemy.name} adapts: +25 shield (discard)`);
     }
   };
 
-  /** Permanently discard one visible board card (free, limited per enemy). */
+  /** Permanently discard one visible board card (mana cost, limited per turn). */
   const discardBoardTile = (index) => {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= currentRow.length) return;
     if (currentRow[index] === undefined || currentRow[index] === null) return;
 
-    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerEnemy;
+    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerTurn;
     if (discardsUsedEnemy >= maxDiscards) return;
+    if (playerMana < TUNING.draft.discardManaCost) return;
 
     setDiscardsUsedEnemy((v) => v + 1);
+    setPlayerMana((mana) => mana - TUNING.draft.discardManaCost);
     playSound('discard');
 
     const composition = getBattleDeckComposition();
@@ -483,6 +506,7 @@ export default function useCombat() {
       next[index] = replacementCard;
       return next;
     });
+    addLog(`T${turn}: discard board tile (-${TUNING.draft.discardManaCost} MP)`);
 
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
@@ -538,9 +562,10 @@ export default function useCombat() {
         baseHpGain: TUNING.player.hpRegenPerFoe,
         manaAfter: manaAfterFoe,
         hpAfter: hpAfterFoe,
-        perks: buildPerkOptions(enemyIdx, playerSpells),
+        choicesAllowed: TUNING.rewardChoicesPerKill,
+        perks: buildPerkOptions(enemyIdx, playerSpells, playerAbilityComboIds),
       });
-      setSelectedPerkKey(null);
+      setSelectedRewardKeys([]);
       setCombatBanner(null);
       playSound('victory');
       addLog(`✦ ${enemy.name} defeated`);
@@ -827,13 +852,18 @@ export default function useCombat() {
   // ----------------------------------------------------------
 
   const applyPerk = (key) => {
-    if (phase !== 'victory' || selectedPerkKey || !victoryReward) return;
+    if (phase !== 'victory' || !victoryReward) return;
+    if (selectedRewardKeys.includes(key)) return;
+    if (selectedRewardKeys.length >= (victoryReward.choicesAllowed || TUNING.rewardChoicesPerKill)) return;
     const perk = victoryReward.perks.find((option) => option.key === key);
     if (!perk) return;
 
     if (perk.kind === 'spell') {
       setPlayerSpells((s) => [...s, perk.spellId]);
       addLog(`Spell learned: ${perk.label}`);
+    } else if (perk.kind === 'ability') {
+      setPlayerAbilityComboIds((ids) => (ids.includes(perk.abilityId) ? ids : [...ids, perk.abilityId]));
+      addLog(`Ability combo learned: ${perk.label}`);
     } else if (perk.key === 'damage') {
       setPlayerDamageBonusPct((value) => value + perk.amount);
       addLog(`Perk chosen: ${perk.label}`);
@@ -849,12 +879,12 @@ export default function useCombat() {
     }
 
     playSound('perk');
-    setSelectedPerkKey(key);
+    setSelectedRewardKeys((keys) => [...keys, key]);
   };
 
   /** Advance to the next enemy in the gauntlet */
   const nextEnemy = () => {
-    if (!selectedPerkKey) return;
+    if (selectedRewardKeys.length < TUNING.rewardChoicesPerKill) return;
     if (enemyIdx < TUNING.enemies.length - 1) {
       playSound('submit');
       const next = enemyIdx + 1;
@@ -863,7 +893,7 @@ export default function useCombat() {
       setEnemyShield(0);
       // Carry current HP/MP/shield to the next fight; no recovery between foes.
       setVictoryReward(null);
-      setSelectedPerkKey(null);
+      setSelectedRewardKeys([]);
       setTurn(1);
       setLog([]);
     }
@@ -885,8 +915,9 @@ export default function useCombat() {
     setDiscardsUsedEnemy(0);
     setSelectedCommittedIndex(null);
     setVictoryReward(null);
-    setSelectedPerkKey(null);
+    setSelectedRewardKeys([]);
     setPlayerSpells([]);
+    setPlayerAbilityComboIds([TUNING.startingAbilityComboId]);
     setSpellsCastThisTurn(0);
     // Rebuild the deck and pool for this fight.
     const [newDeck, initialPool] = buildBattleDeck();
@@ -910,11 +941,12 @@ export default function useCombat() {
     manaCost: 0,
     effects: [],
   };
-  const sequenceValid = isValidSequence(committed);
+  const sequenceValid = isValidSequence(committed, resolutionModifiers);
   const sequenceFull = picksUsed >= pickLimit;
   const rerollsLeftEnemy = Math.max(0, TUNING.draft.maxRerollsPerEnemy - rerollsUsedEnemy);
-  const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerEnemy;
+  const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerTurn;
   const discardsLeftEnemy = Math.max(0, maxDiscards - discardsUsedEnemy);
+  const unlockedAbilityCombos = TUNING.comboAbilities.filter((combo) => playerAbilityComboIds.includes(combo.id));
   const deckCounts = deck.reduce((acc, card) => {
     acc[card] = (acc[card] || 0) + 1;
     return acc;
@@ -962,9 +994,12 @@ export default function useCombat() {
       sequenceFull,
       combatBanner,
       victoryReward,
-      selectedPerkKey,
+      selectedRewardKeys,
       logEndRef,
       playerSpells,
+      playerAbilityComboIds,
+      unlockedAbilityCombos,
+      totalAbilityComboCount: TUNING.comboAbilities.length,
       spellsCastThisTurn,
     },
     actions: {

@@ -58,9 +58,11 @@ export const computeResolution = (committed, modifiers = {}) => {
   return { damage, block, mana, segments };
 };
 
-export const getAbilityCombo = (committed) => {
+export const getAbilityCombo = (committed, unlockedAbilityIds = null) => {
   const sequence = committed.filter((t) => t !== null && t !== undefined).join('');
-  return TUNING.comboAbilities.find((combo) => combo.pattern === sequence) || null;
+  return TUNING.comboAbilities.find((combo) => (
+    combo.pattern === sequence && (!unlockedAbilityIds || unlockedAbilityIds.includes(combo.id))
+  )) || null;
 };
 
 export const computeAbilityResolution = (combo, context = {}) => {
@@ -82,7 +84,7 @@ export const computeAbilityResolution = (combo, context = {}) => {
     block: 0,
     mana: 0,
     heal: 0,
-    manaCost: 0,
+    manaCost: combo.manaCost || 0,
     hits: null,
     effects: [],
     segments: [{
@@ -94,7 +96,7 @@ export const computeAbilityResolution = (combo, context = {}) => {
     }],
   };
 
-  switch (combo.id) {
+  switch (combo.effect) {
     case 'execution': {
       const executeBonus = enemyHp > 0 && enemyHp <= enemyMaxHp * 0.3 ? 25 : 0;
       return {
@@ -129,12 +131,10 @@ export const computeAbilityResolution = (combo, context = {}) => {
         effects: ['incoming attack -10'],
       };
     case 'mana_blade': {
-      const manaCost = Math.min(10, playerMana);
       return {
         ...base,
         damage: scaledDamage(50 + Math.round(playerMana * 0.2)),
-        manaCost,
-        effects: [`spend ${manaCost} mana`],
+        effects: [`spend ${base.manaCost} mana`],
       };
     }
     case 'counter_stance':
@@ -169,15 +169,20 @@ export const computeAbilityResolution = (combo, context = {}) => {
         effects: ['heal 12 if shield remains'],
       };
     case 'life_channel': {
-      const manaCost = Math.min(15, playerMana);
       return {
         ...base,
         damage: scaledDamage(25),
-        heal: 10 + manaCost,
-        manaCost,
-        effects: [`spend ${manaCost} mana`, `heal ${10 + manaCost}`],
+        heal: 10 + base.manaCost,
+        effects: [`spend ${base.manaCost} mana`, `heal ${10 + base.manaCost}`],
       };
     }
+    case 'arcane_bolt':
+      return {
+        ...base,
+        damage: scaledDamage(35 + Math.round(playerMana * 0.1)),
+        mana: 5,
+        effects: ['precise mana strike'],
+      };
     default:
       return base;
   }
@@ -193,8 +198,8 @@ export const findBestAcceptedSequence = (committed, modifiers = {}) => {
   const filtered = committed.filter((t) => t !== null && t !== undefined);
   if (filtered.length === 0) return null;
 
-  const abilityCombo = getAbilityCombo(filtered);
-  if (abilityCombo) {
+  const abilityCombo = getAbilityCombo(filtered, modifiers.unlockedAbilityIds);
+  if (abilityCombo && (modifiers.playerMana ?? 0) >= (abilityCombo.manaCost || 0)) {
     return computeAbilityResolution(abilityCombo, modifiers);
   }
 
@@ -221,8 +226,8 @@ export const findBestAcceptedSequence = (committed, modifiers = {}) => {
 };
 
 /** Check whether the submitted hand contains any accepted combo */
-export const isValidSequence = (committed) => {
-  return Boolean(findBestAcceptedSequence(committed));
+export const isValidSequence = (committed, modifiers = {}) => {
+  return Boolean(findBestAcceptedSequence(committed, modifiers));
 };
 
 export const abilityDescription = (key) => {

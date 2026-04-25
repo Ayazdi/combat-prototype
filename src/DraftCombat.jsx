@@ -52,6 +52,7 @@ export default function DraftCombat() {
           boardCardAnimationKeys={state.boardCardAnimationKeys}
           rerollsLeftEnemy={state.rerollsLeftEnemy}
           discardsLeftEnemy={state.discardsLeftEnemy}
+          playerMana={state.playerMana}
           deckSize={state.deckSize}
           deckCounts={state.deckCounts}
           deckShuffleCount={state.deckShuffleCount}
@@ -70,7 +71,11 @@ export default function DraftCombat() {
         />
 
         {/* Ability combo reference */}
-        <AbilityCombos />
+        <AbilityCombos
+          combos={state.unlockedAbilityCombos}
+          totalCount={state.playerAbilityComboIds.length}
+          totalAvailable={state.totalAbilityComboCount}
+        />
 
         {/* Spells panel — shown only when the player owns at least one spell */}
         <SpellsPanel
@@ -103,7 +108,7 @@ export default function DraftCombat() {
           enemy={state.enemy}
           enemyIdx={state.enemyIdx}
           victoryReward={state.victoryReward}
-          selectedPerkKey={state.selectedPerkKey}
+          selectedRewardKeys={state.selectedRewardKeys}
           onApplyPerk={actions.applyPerk}
           onRestart={actions.restart}
           onNextEnemy={actions.nextEnemy}

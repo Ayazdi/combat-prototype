@@ -11,7 +11,7 @@ export default function ResultOverlay({
   enemy,
   enemyIdx,
   victoryReward,
-  selectedPerkKey,
+  selectedRewardKeys = [],
   onApplyPerk,
   onRestart,
   onNextEnemy,
@@ -19,6 +19,8 @@ export default function ResultOverlay({
   if (phase !== 'victory' && phase !== 'defeat') return null;
 
   const isVictory = phase === 'victory';
+  const choicesAllowed = victoryReward?.choicesAllowed ?? TUNING.rewardChoicesPerKill;
+  const choicesMade = selectedRewardKeys?.length ?? 0;
 
   return (
     <div style={styles.overlay}>
@@ -40,23 +42,25 @@ export default function ResultOverlay({
             <div>
               +{victoryReward?.baseManaGain ?? TUNING.player.manaRegenPerFoe} Mana / +{victoryReward?.baseHpGain ?? TUNING.player.hpRegenPerFoe} HP
             </div>
+            <div>Choose {choicesAllowed} rewards ({choicesMade}/{choicesAllowed})</div>
           </div>
         )}
 
         {isVictory && victoryReward && (
           <div style={styles.perkGrid}>
             {victoryReward.perks.map((perk) => {
-              const isSelected = selectedPerkKey === perk.key;
+              const isSelected = selectedRewardKeys.includes(perk.key);
+              const rewardLimitReached = choicesMade >= choicesAllowed;
               return (
                 <button
                   key={perk.key}
                   type="button"
                   onClick={() => onApplyPerk(perk.key)}
-                  disabled={Boolean(selectedPerkKey)}
+                  disabled={isSelected || rewardLimitReached}
                   style={{
                     ...styles.perkBtn,
                     ...(isSelected ? styles.perkBtnSelected : {}),
-                    ...(selectedPerkKey && !isSelected ? styles.perkBtnDisabled : {}),
+                    ...(rewardLimitReached && !isSelected ? styles.perkBtnDisabled : {}),
                   }}
                   className="overlay-btn"
                 >
@@ -76,11 +80,11 @@ export default function ResultOverlay({
           {isVictory && enemyIdx < TUNING.enemies.length - 1 && (
             <button
               onClick={onNextEnemy}
-              disabled={!selectedPerkKey}
+              disabled={choicesMade < choicesAllowed}
               style={{
                 ...styles.overlayBtn,
                 ...styles.overlayBtnPrimary,
-                ...(!selectedPerkKey ? styles.overlayBtnDisabled : {}),
+                ...(choicesMade < choicesAllowed ? styles.overlayBtnDisabled : {}),
               }}
               className="overlay-btn"
             >
