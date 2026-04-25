@@ -1,4 +1,5 @@
 import { TUNING } from '../constants';
+import { abilityDescription } from '../gameHelpers';
 import { styles } from '../styles';
 
 // ============================================================
@@ -20,6 +21,7 @@ export default function Combatants({
       {/* ---- Player stats ---- */}
       <div style={styles.combatant}>
         <div style={styles.combatantLabel}>YOU · Lv1</div>
+        <div style={styles.statsLine}>ATK {TUNING.tiles.attackBase} · DEF {TUNING.tiles.defenceBase}</div>
 
         {/* HP bar */}
         <StatBar
@@ -53,9 +55,24 @@ export default function Combatants({
 
       {/* ---- Enemy stats ---- */}
       <div style={styles.combatant}>
-        <div style={{ ...styles.combatantLabel, textAlign: 'right' }}>
+        <div style={{ ...styles.combatantLabel, textAlign: 'right', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
           {enemy.name.toUpperCase()} · Lv{enemy.id}
+          {enemy.ability && (
+            <span className="ability-wrap" style={styles.abilityWrap}>
+              <span
+                className="ability-badge"
+                style={styles.abilityBadge}
+                title={abilityDescription(enemy.ability)}
+              >
+                ⓘ
+              </span>
+              <span className="ability-tooltip" style={styles.abilityTooltip}>
+                {abilityDescription(enemy.ability)}
+              </span>
+            </span>
+          )}
         </div>
+        <div style={{ ...styles.statsLine, textAlign: 'right' }}>ATK {enemy.attack} · DEF {enemy.defend}</div>
 
         {/* Enemy HP bar */}
         <StatBar

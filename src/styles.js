@@ -70,6 +70,12 @@ export const globalCss = `
     animation: combatBannerIn 0.28s ease-out, combatBannerPulse 1.15s ease-in-out 0.28s infinite alternate;
   }
 
+  /* Ability tooltip hover reveal */
+  .ability-wrap:hover .ability-tooltip {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   /* Victory / defeat overlay buttons */
   .overlay-btn {
     cursor: pointer;
@@ -222,6 +228,51 @@ export const styles = {
     letterSpacing: '0.2em',
     color: '#b8a88a',
     fontWeight: 600,
+  },
+  statsLine: {
+    fontSize: 10,
+    color: '#6a6258',
+    letterSpacing: '0.12em',
+    marginTop: 2,
+  },
+  abilityWrap: {
+    position: 'relative',
+    display: 'inline-block',
+    marginLeft: 6,
+  },
+  abilityBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 11,
+    width: 16,
+    height: 16,
+    borderRadius: '50%',
+    border: '1px solid #4a4438',
+    color: '#8a8070',
+    cursor: 'help',
+    lineHeight: 1,
+    userSelect: 'none',
+  },
+  abilityTooltip: {
+    position: 'absolute',
+    bottom: '100%',
+    right: 0,
+    marginBottom: 6,
+    width: 200,
+    padding: '7px 10px',
+    background: '#1a1612',
+    border: '1px solid #3a342a',
+    borderRadius: 2,
+    fontSize: 10,
+    color: '#c9b28a',
+    letterSpacing: '0.06em',
+    lineHeight: 1.5,
+    opacity: 0,
+    pointerEvents: 'none',
+    transition: 'opacity 0.15s ease',
+    zIndex: 10,
+    whiteSpace: 'normal',
   },
 
   // --- Stat bars (HP / MP / Shield) ---
