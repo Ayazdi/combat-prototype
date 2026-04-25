@@ -49,8 +49,7 @@ export default function DraftCombat() {
           currentRow={state.currentRow}
           boardCardAnimationKeys={state.boardCardAnimationKeys}
           rerollsLeftEnemy={state.rerollsLeftEnemy}
-          playerMana={state.playerMana}
-          discardCost={state.discardCost}
+          discardsLeftEnemy={state.discardsLeftEnemy}
           deckSize={state.deckSize}
           deckCounts={state.deckCounts}
           deckShuffleCount={state.deckShuffleCount}

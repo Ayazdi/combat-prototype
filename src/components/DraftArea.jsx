@@ -1,4 +1,3 @@
-import { TUNING } from '../constants';
 import { styles } from '../styles';
 import { tileGlyph, tileLabel, tileStyle } from '../tileHelpers';
 
@@ -18,8 +17,7 @@ export default function DraftArea({
   currentRow,
   boardCardAnimationKeys,
   rerollsLeftEnemy,
-  playerMana,
-  discardCost,
+  discardsLeftEnemy,
   deckSize,
   deckCounts,
   deckShuffleCount,
@@ -36,18 +34,17 @@ export default function DraftArea({
   onDiscardBoardTile,
   onSubmit,
 }) {
-  const rerollDisabled =
-    phase !== 'drafting' || rerollsLeftEnemy <= 0 || playerMana < TUNING.draft.rerollCost;
+  const rerollDisabled = phase !== 'drafting' || rerollsLeftEnemy <= 0;
 
   const discardDisabled =
     phase !== 'drafting' ||
     committedLength === 0 ||
     selectedCommittedIndex === null ||
-    playerMana < discardCost;
+    discardsLeftEnemy <= 0;
 
   // Can't pick more tiles once we hit the max
   const pickDisabled = phase !== 'drafting' || sequenceFull;
-  const boardDiscardDisabled = phase !== 'drafting' || playerMana < discardCost;
+  const boardDiscardDisabled = phase !== 'drafting' || discardsLeftEnemy <= 0;
 
   // Submit requires at least 1 tile committed
   const submitDisabled = phase !== 'drafting' || committedLength === 0;
@@ -94,7 +91,7 @@ export default function DraftArea({
               }}
               className="tile-discard-btn"
               aria-label={`Discard ${tileLabel(tile)} from board`}
-              title={`Discard from board (${discardCost} MP)`}
+              title={`Discard from board (${discardsLeftEnemy} left)`}
             >
               x
             </button>
@@ -107,6 +104,7 @@ export default function DraftArea({
         <span style={styles.deckChip}>LEFT: {deckSize}</span>
         <span style={styles.deckChip}>A: {deckCounts?.A ?? 0}</span>
         <span style={styles.deckChip}>D: {deckCounts?.D ?? 0}</span>
+        <span style={styles.deckChip}>M: {deckCounts?.M ?? 0}</span>
         <span style={styles.deckChip}>E: {deckCounts?.E ?? 0}</span>
         <span style={styles.deckChip}>SHUFFLED: {deckIsShuffled ? 'YES' : 'NO'}</span>
         <span style={styles.deckChip}>SHUFFLES: {deckShuffleCount}</span>
@@ -124,8 +122,8 @@ export default function DraftArea({
           className="ctrl-btn"
         >
           <span style={styles.ctrlIcon}>↻</span>
-          <span>REROLL</span>
-          <span style={styles.ctrlCost}>{TUNING.draft.rerollCost} MP • {rerollsLeftEnemy} LEFT (ENEMY)</span>
+          <span>REROLL ({rerollsLeftEnemy}/1)</span>
+          <span style={styles.ctrlCost}>FREE • {rerollsLeftEnemy} LEFT</span>
         </button>
 
         <button
@@ -139,7 +137,7 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>✕</span>
           <span>DISCARD SELECTED</span>
-          <span style={styles.ctrlCost}>{discardCost} MP</span>
+          <span style={styles.ctrlCost}>FREE • {discardsLeftEnemy} LEFT</span>
         </button>
 
         {/* SUBMIT — highlighted green when the sequence is valid */}
