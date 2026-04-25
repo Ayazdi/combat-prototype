@@ -59,7 +59,7 @@ export default function CommittedSequence({
         {Array.from({ length: slotCount }).map((_, i) => {
           const tile = committed[i];
           const isCard = tile !== undefined && tile !== null;
-          const isActionTile = tile === 'A' || tile === 'D';
+          const isActionTile = tile === 'A' || tile === 'D' || tile === 'M';
           const isEmptyCard = tile === 'E';
           const isUnfilled = tile === undefined || tile === null;
           const isEmptyCell = isUnfilled;
