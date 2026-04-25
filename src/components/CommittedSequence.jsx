@@ -33,6 +33,12 @@ export default function CommittedSequence({
           <span style={styles.previewDmg}>⚔ {preview.damage}</span>
           <span style={styles.previewSep}>·</span>
           <span style={styles.previewBlk}>⛨ {preview.block}</span>
+          {preview.mana > 0 && (
+            <>
+              <span style={styles.previewSep}>·</span>
+              <span style={{ color: '#c4a8e8', fontWeight: 600 }}>✦ +{preview.mana} mana</span>
+            </>
+          )}
         </span>
       </div>
 
@@ -108,6 +114,7 @@ export default function CommittedSequence({
             <span key={i} style={styles.segChip}>
               {s.type === 'A' && `${'A'.repeat(s.count)} ×${s.mult} = ${s.damage}`}
               {s.type === 'D' && `${'D'.repeat(s.count)} ×${s.mult} = ${s.block}`}
+              {s.type === 'M' && `${'M'.repeat(s.count)} ×${s.mult} = +${s.mana}mp`}
               {s.type === 'E' && 'NO ACTION'}
             </span>
           ))

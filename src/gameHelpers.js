@@ -23,12 +23,12 @@ export const rollRow = (weights, size = TUNING.draft.rowSize) => {
 export const computeResolution = (committed, modifiers = {}) => {
   let damage = 0;
   let block = 0;
+  let mana = 0;
   const segments = [];
   const damageMultiplier = modifiers.damageMultiplier ?? 1;
   const defenceMultiplier = modifiers.defenceMultiplier ?? 1;
 
-  // With the new rules committed must be a single pure run (AA, DDD, etc.)
-  // but we still parse generically so the preview works for partial picks too.
+  // Parse committed tiles into contiguous runs and compute each segment's output.
   let i = 0;
   while (i < committed.length) {
     const t = committed[i];
@@ -47,46 +47,44 @@ export const computeResolution = (committed, modifiers = {}) => {
       const blk = Math.round(TUNING.tiles.defenceBase * mult * defenceMultiplier);
       block += blk;
       segments.push({ type: 'D', count, block: blk, mult });
+    } else if (t === 'M') {
+      const mult = TUNING.tiles.manaCombos[cap] || 1;
+      const gained = Math.round(TUNING.tiles.manaBase * mult);
+      mana += gained;
+      segments.push({ type: 'M', count, mana: gained, mult });
     }
     i = j;
   }
-  return { damage, block, segments };
+  return { damage, block, mana, segments };
 };
 
 /**
- * Find the strongest accepted combo that exists in the submitted hand.
- * "Strongest" is based on current tuning using score = damage + block.
+ * Validate the submitted sequence and return its resolution.
+ * A submission is valid if it contains at least one contiguous run of
+ * ≥ TUNING.tiles.minComboLength identical tiles of type A, D, or M.
+ * Returns null when invalid.
  */
 export const findBestAcceptedSequence = (committed, modifiers = {}) => {
-  const submitted = committed.join('');
-  if (!submitted) return null;
+  const filtered = committed.filter((t) => t !== null && t !== undefined);
+  if (filtered.length === 0) return null;
 
-  let best = null;
-  for (const combo of TUNING.acceptedSequences) {
-    if (!submitted.includes(combo)) continue;
+  const { damage, block, mana, segments } = computeResolution(filtered, modifiers);
 
-    const tiles = combo.split('');
-    const resolution = computeResolution(tiles, modifiers);
-    const score = resolution.damage + resolution.block;
+  const hasValidRun = segments.some(
+    (s) => (s.type === 'A' || s.type === 'D' || s.type === 'M') && s.count >= TUNING.tiles.minComboLength,
+  );
 
-    if (
-      !best ||
-      score > best.score ||
-      (score === best.score && resolution.damage > best.damage) ||
-      (score === best.score && resolution.damage === best.damage && combo.length > best.length)
-    ) {
-      best = {
-        sequence: combo,
-        tiles,
-        damage: resolution.damage,
-        block: resolution.block,
-        score,
-        length: combo.length,
-      };
-    }
-  }
+  if (!hasValidRun) return null;
 
-  return best;
+  return {
+    tiles: filtered,
+    damage,
+    block,
+    mana,
+    segments,
+    length: filtered.length,
+    sequence: filtered.join(''),
+  };
 };
 
 /** Check whether the submitted hand contains any accepted combo */
@@ -100,7 +98,7 @@ export const abilityDescription = (key) => {
     case 'empty_plus': return 'Battle deck shifts +4 No Action tiles';
     case 'armored': return 'Reduces incoming hit damage by 10';
     case 'adaptive': return 'Gains +25 shield whenever you reroll or discard';
-    case 'double_discard': return 'Discard costs 50 MP';
+    case 'double_discard': return 'Discard limit halved (1 per enemy)';
     default: return '';
   }
 };

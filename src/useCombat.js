@@ -37,6 +37,7 @@ export default function useCombat() {
     Array.from({ length: TUNING.draft.maxSequence }, () => 0),
   );
   const [rerollsUsedEnemy, setRerollsUsedEnemy] = useState(0);
+  const [discardsUsedEnemy, setDiscardsUsedEnemy] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
   const [deckShuffleCount, setDeckShuffleCount] = useState(1);
@@ -115,13 +116,6 @@ export default function useCombat() {
       initialPool.push(card);
     }
     return [workingDeck, initialPool];
-  };
-
-  /** Return the mana cost to discard (doubled by Witch passive) */
-  const getDiscardCost = () => {
-    return enemy.ability === 'double_discard'
-      ? TUNING.draft.discardCost * 2
-      : TUNING.draft.discardCost;
   };
 
   const getPerkScale = (defeatedEnemyIndex) => {
@@ -244,7 +238,7 @@ export default function useCombat() {
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
     setPickLimit(TUNING.draft.maxSequence);
-    if (turnNum === 1) setRerollsUsedEnemy(0);
+    if (turnNum === 1) { setRerollsUsedEnemy(0); setDiscardsUsedEnemy(0); }
     setRound(1);
     setPhase('drafting');
   };
@@ -264,6 +258,7 @@ export default function useCombat() {
     setDeckShuffleCount(1);
     enemyIntentBagRef.current = [];
     setEnemyShield(0);
+    setDiscardsUsedEnemy(0);
     const initialQueue = buildIntentQueue(1);
     setEnemyIntentQueue(initialQueue);
     startTurn(1, initialQueue);
@@ -359,12 +354,10 @@ export default function useCombat() {
     }
   };
 
-  /** Spend mana to reroll the board without ending the turn or spending a pick. */
+  /** Reroll the board without ending the turn or spending a pick. Free, limited per enemy. */
   const reroll = () => {
     if (phase !== 'drafting') return;
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
-    if (playerMana < TUNING.draft.rerollCost) return;
-    setPlayerMana((m) => m - TUNING.draft.rerollCost);
     playSound('reroll');
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
     // Reroll intentionally does not change turn, round, picks used, or pick limit.
@@ -399,7 +392,7 @@ export default function useCombat() {
   };
 
   /**
-   * Spend mana to permanently discard one selected committed tile.
+   * Permanently discard one selected committed tile (free, limited per enemy).
    * Discard grants +1 extra selection budget this turn.
    */
   const discardSelected = () => {
@@ -411,10 +404,10 @@ export default function useCombat() {
     const discardedCard = committed[discardIndex];
     if (discardedCard === undefined || discardedCard === null) return;
 
-    const cost = getDiscardCost();
-    if (playerMana < cost) return;
+    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerEnemy;
+    if (discardsUsedEnemy >= maxDiscards) return;
 
-    setPlayerMana((m) => m - cost);
+    setDiscardsUsedEnemy((v) => v + 1);
     playSound('discard');
 
     setCommitted((c) => {
@@ -433,16 +426,16 @@ export default function useCombat() {
     }
   };
 
-  /** Spend mana to permanently discard one visible board card. */
+  /** Permanently discard one visible board card (free, limited per enemy). */
   const discardBoardTile = (index) => {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= currentRow.length) return;
     if (currentRow[index] === undefined || currentRow[index] === null) return;
 
-    const cost = getDiscardCost();
-    if (playerMana < cost) return;
+    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerEnemy;
+    if (discardsUsedEnemy >= maxDiscards) return;
 
-    setPlayerMana((m) => m - cost);
+    setDiscardsUsedEnemy((v) => v + 1);
     playSound('discard');
 
     const composition = getBattleDeckComposition();
@@ -500,7 +493,7 @@ export default function useCombat() {
   // ----------------------------------------------------------
   const resolveTurn = (finalSequence) => {
     setPhase('resolving');
-    const { damage, block, segments } = computeResolution(finalSequence, {
+    const { damage, block, mana, segments } = computeResolution(finalSequence, {
       damageMultiplier: 1 + playerDamageBonusPct,
       defenceMultiplier: 1 + playerDefenceBonusPct,
     });
@@ -511,6 +504,7 @@ export default function useCombat() {
         if (s.type === 'E') return '·';
         if (s.type === 'A') return `${'A'.repeat(s.count)}(${s.damage})`;
         if (s.type === 'D') return `${'D'.repeat(s.count)}(${s.block})`;
+        if (s.type === 'M') return `${'M'.repeat(s.count)}(+${s.mana}mp)`;
         return '';
       })
       .join(' ');
@@ -529,6 +523,10 @@ export default function useCombat() {
         } else {
           logParts.push(`+${block} shield`);
         }
+      }
+      if (mana > 0) {
+        setPlayerMana((m) => Math.min(TUNING.player.maxMana, m + mana));
+        logParts.push(`+${mana} mana`);
       }
       addLog(logParts.join(' / '));
       showCombatBanner({
@@ -714,6 +712,7 @@ export default function useCombat() {
     setTurn(1);
     setLog([]);
     setRerollsUsedEnemy(0);
+    setDiscardsUsedEnemy(0);
     setSelectedCommittedIndex(null);
     setVictoryReward(null);
     setSelectedPerkKey(null);
@@ -736,14 +735,15 @@ export default function useCombat() {
   };
   const bestCombo = findBestAcceptedSequence(committed, resolutionModifiers);
   const preview = computeResolution(bestCombo ? bestCombo.tiles : [], resolutionModifiers);
-  const discardCost = getDiscardCost();
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = picksUsed >= pickLimit;
   const rerollsLeftEnemy = Math.max(0, TUNING.draft.maxRerollsPerEnemy - rerollsUsedEnemy);
+  const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerEnemy;
+  const discardsLeftEnemy = Math.max(0, maxDiscards - discardsUsedEnemy);
   const deckCounts = deck.reduce((acc, card) => {
     acc[card] = (acc[card] || 0) + 1;
     return acc;
-  }, { A: 0, D: 0, E: 0 });
+  }, { A: 0, D: 0, M: 0, E: 0 });
 
   // ----------------------------------------------------------
   // Public API
@@ -770,18 +770,19 @@ export default function useCombat() {
       boardCardAnimationKeys,
       committedCardAnimationKeys,
       rerollsUsedEnemy,
+      discardsUsedEnemy,
       deckSize: deck.length,
       deckCounts,
       deckShuffleCount,
       deckIsShuffled: true,
       rerollsLeftEnemy,
+      discardsLeftEnemy,
       log,
       phase,
       incomingDamage,
       enemyTelegraph,
       enemyIntentQueue,
       preview,
-      discardCost,
       sequenceValid,
       sequenceFull,
       combatBanner,

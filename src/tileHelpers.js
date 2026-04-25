@@ -1,5 +1,5 @@
-export const tileGlyph = (t) => (t === 'A' ? '⚔' : t === 'D' ? '⛨' : '▦');
-export const tileLabel = (t) => (t === 'A' ? 'ATTACK' : t === 'D' ? 'DEFENCE' : 'NO ACTION');
+export const tileGlyph = (t) => (t === 'A' ? '⚔' : t === 'D' ? '⛨' : t === 'M' ? '✦' : '▦');
+export const tileLabel = (t) => (t === 'A' ? 'ATTACK' : t === 'D' ? 'DEFENCE' : t === 'M' ? 'MANA' : 'NO ACTION');
 
 export const tileStyle = (t) => {
   if (t === 'A') return {
@@ -11,6 +11,11 @@ export const tileStyle = (t) => {
     background: 'linear-gradient(165deg, #1a2838 0%, #10192a 100%)',
     borderColor: '#3a6fa6',
     color: '#8ab4d8',
+  };
+  if (t === 'M') return {
+    background: 'linear-gradient(165deg, #251838 0%, #160e2a 100%)',
+    borderColor: '#6a4caf',
+    color: '#c4a8e8',
   };
   return {
     background: `
