@@ -117,6 +117,8 @@ export default function Combatants({
 // the player and enemy panels.
 // ============================================================
 function StatBar({ label, current, max, gradient }) {
+  const widthPct = Math.max(0, Math.min(100, (current / max) * 100));
+
   return (
     <div style={styles.statBar}>
       <div style={styles.statLabel}>{label}</div>
@@ -124,7 +126,7 @@ function StatBar({ label, current, max, gradient }) {
         <div
           style={{
             ...styles.barFill,
-            width: `${(current / max) * 100}%`,
+            width: `${widthPct}%`,
             background: gradient,
           }}
         />

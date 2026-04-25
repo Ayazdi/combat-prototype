@@ -39,6 +39,18 @@ export default function CommittedSequence({
               <span style={{ color: '#c4a8e8', fontWeight: 600 }}>✦ +{preview.mana} mana</span>
             </>
           )}
+          {preview.manaCost > 0 && (
+            <>
+              <span style={styles.previewSep}> / </span>
+              <span style={{ color: '#7a9ed8', fontWeight: 600 }}>-{preview.manaCost} mana</span>
+            </>
+          )}
+          {preview.heal > 0 && (
+            <>
+              <span style={styles.previewSep}> / </span>
+              <span style={{ color: '#8ad88a', fontWeight: 600 }}>+{preview.heal} HP</span>
+            </>
+          )}
         </span>
       </div>
 
@@ -112,6 +124,7 @@ export default function CommittedSequence({
         ) : (
           preview.segments.map((s, i) => (
             <span key={i} style={styles.segChip}>
+              {s.type === 'ABILITY' && `${s.pattern} ${s.name}`}
               {s.type === 'A' && `${'A'.repeat(s.count)} ×${s.mult} = ${s.damage}`}
               {s.type === 'D' && `${'D'.repeat(s.count)} ×${s.mult} = ${s.block}`}
               {s.type === 'M' && `${'M'.repeat(s.count)} ×${s.mult} = +${s.mana}mp`}

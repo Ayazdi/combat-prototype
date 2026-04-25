@@ -94,6 +94,15 @@ export default function useCombat() {
     return 'Player took no action';
   };
 
+  const buildResolutionContext = () => ({
+    damageMultiplier: 1 + playerDamageBonusPct,
+    defenceMultiplier: 1 + playerDefenceBonusPct,
+    playerMana,
+    playerMaxMana: TUNING.player.maxMana,
+    enemyHp,
+    enemyMaxHp: enemy.hp,
+  });
+
   /** Return the deck composition for this battle, adjusted for the enemy passive. */
   const getBattleDeckComposition = () => {
     const base = { ...TUNING.deckComposition };
@@ -360,17 +369,14 @@ export default function useCombat() {
     if (committed.length === 0) return;
     playSound('submit');
 
-    const bestCombo = findBestAcceptedSequence(committed, {
-      damageMultiplier: 1 + playerDamageBonusPct,
-      defenceMultiplier: 1 + playerDefenceBonusPct,
-    });
+    const bestCombo = findBestAcceptedSequence(committed, buildResolutionContext());
 
     if (bestCombo) {
       if (bestCombo.sequence !== committed.join('')) {
         addLog(`T${turn}: best combo found in hand -> ${bestCombo.sequence}`);
       }
       // Resolve using the strongest accepted combo found in the submitted hand.
-      resolveTurn(bestCombo.tiles);
+      resolveTurn(bestCombo);
     } else {
       // Invalid sequence — log the failure and punish the player
       addLog(`T${turn}: INVALID sequence [${committed.join('')}] — no damage, no block`);
@@ -580,15 +586,65 @@ export default function useCombat() {
   // ----------------------------------------------------------
   // Resolution — apply damage, shields, check win/loss
   // ----------------------------------------------------------
-  const resolveTurn = (finalSequence) => {
+  const resolveTurn = (resolvedInput) => {
     setPhase('resolving');
-    const { damage, block, mana, segments } = computeResolution(finalSequence, {
-      damageMultiplier: 1 + playerDamageBonusPct,
-      defenceMultiplier: 1 + playerDefenceBonusPct,
-    });
+    const resolution = Array.isArray(resolvedInput)
+      ? {
+          kind: 'basic',
+          tiles: resolvedInput,
+          sequence: resolvedInput.join(''),
+          length: resolvedInput.length,
+          heal: 0,
+          manaCost: 0,
+          ...computeResolution(resolvedInput, {
+            damageMultiplier: 1 + playerDamageBonusPct,
+            defenceMultiplier: 1 + playerDefenceBonusPct,
+          }),
+        }
+      : resolvedInput;
+    const {
+      damage,
+      block,
+      mana,
+      heal = 0,
+      manaCost = 0,
+      segments,
+      ability,
+      hits,
+    } = resolution;
+    const finalTiles = resolution.tiles || [];
+
+    const applyDamageToEnemy = (rawHits, startingShield, startingHp) => {
+      let nextShield = startingShield;
+      let nextHp = startingHp;
+      let absorbedTotal = 0;
+      let dealtTotal = 0;
+      let armorReductionTotal = 0;
+
+      rawHits.forEach((rawHit) => {
+        if (rawHit <= 0) return;
+        const armorReduction = enemy.ability === 'armored' ? Math.min(10, rawHit) : 0;
+        const effectiveHit = Math.max(0, rawHit - armorReduction);
+        const absorbed = Math.min(nextShield, effectiveHit);
+        const dealt = effectiveHit - absorbed;
+        nextShield -= absorbed;
+        nextHp = Math.max(0, nextHp - dealt);
+        armorReductionTotal += armorReduction;
+        absorbedTotal += absorbed;
+        dealtTotal += dealt;
+      });
+
+      return {
+        shield: nextShield,
+        hp: nextHp,
+        absorbed: absorbedTotal,
+        dealt: dealtTotal,
+        armorReduction: armorReductionTotal,
+      };
+    };
 
     // Readable log string for the committed sequence
-    const seqStr = segments
+    const seqStr = ability ? `${ability.pattern} ${ability.name}` : segments
       .map((s) => {
         if (s.type === 'E') return '·';
         if (s.type === 'A') return `${'A'.repeat(s.count)}(${s.damage})`;
@@ -599,54 +655,65 @@ export default function useCombat() {
       .join(' ');
 
     setTimeout(() => {
-      // --- Shield gain (capped at max) ---
+      // --- Resource costs/gains, healing, and shield gain ---
+      const shieldCap = TUNING.player.maxShield + (resolution.shieldCapBonus || 0);
+      const manaAfterCost = Math.max(0, playerMana - manaCost);
+      const manaAfterResolution = Math.min(TUNING.player.maxMana, manaAfterCost + mana);
+      const playerHpAfterAbility = Math.min(TUNING.player.maxHp, playerHp + heal);
       const shieldBefore = playerShield;
       const shieldRaw = shieldBefore + block;
-      const shieldAfterGain = Math.min(TUNING.player.maxShield, shieldRaw);
+      const shieldAfterGain = Math.min(shieldCap, shieldRaw);
       const shieldWasted = shieldRaw - shieldAfterGain;
 
       const logParts = [`T${turn}: ${seqStr} → ${damage} dmg`];
       if (block > 0) {
         if (shieldWasted > 0) {
-          logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${TUNING.player.maxShield})`);
+          logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${shieldCap})`);
         } else {
           logParts.push(`+${block} shield`);
         }
       }
+      if (manaCost > 0) {
+        logParts.push(`-${manaCost} mana`);
+      }
       if (mana > 0) {
-        setPlayerMana((m) => Math.min(TUNING.player.maxMana, m + mana));
         logParts.push(`+${mana} mana`);
       }
+      if (heal > 0) {
+        logParts.push(`+${playerHpAfterAbility - playerHp} HP`);
+      }
+      if (ability?.detail) {
+        logParts.push(ability.detail);
+      }
+      setPlayerMana(manaAfterResolution);
+      if (heal > 0) setPlayerHp(playerHpAfterAbility);
       addLog(logParts.join(' / '));
       showCombatBanner({
         eyebrow: 'Player Action',
-        title: formatPlayerAction(damage, block),
+        title: ability ? ability.name : formatPlayerAction(damage, block),
         detail: seqStr || 'No combo resolved',
         tone: 'player',
       });
-      if (finalSequence.length >= 2) playSound('combo');
+      if (finalTiles.length >= 2) playSound('combo');
       if (damage > 0) playSound('attack');
       if (block > 0) playSound('defence');
 
       // --- Apply player damage to enemy (enemy shield absorbs first) ---
-      const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
-      const effectiveDamage = Math.max(0, damage - armoredReduction);
-      if (armoredReduction > 0) {
-        addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
+      const enemyDamage = applyDamageToEnemy(hits || (damage > 0 ? [damage] : []), enemyShield, enemyHp);
+      const enemyShieldAfterHit = enemyDamage.shield;
+      const newEnemyHp = enemyDamage.hp;
+      if (enemyDamage.armorReduction > 0) {
+        addLog(`  ${enemy.name} armor reduces hit by ${enemyDamage.armorReduction}`);
       }
-      const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
-      const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
-      const dealtToHp = effectiveDamage - enemyAbsorbed;
-      const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
-      if (enemyAbsorbed > 0) {
-        addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
+      if (enemyDamage.absorbed > 0) {
+        addLog(`  ${enemy.name} shield absorbs ${enemyDamage.absorbed}`);
       }
       setPlayerShield(shieldAfterGain);
       setEnemyShield(enemyShieldAfterHit);
       setEnemyHp(newEnemyHp);
 
       if (newEnemyHp <= 0) {
-        triggerVictory(playerMana, playerHp);
+        triggerVictory(manaAfterResolution, playerHpAfterAbility);
         return;
       }
 
@@ -665,7 +732,8 @@ export default function useCombat() {
 
       setTimeout(() => {
         let shieldAfterEnemyAction = enemyShieldAfterHit;
-        let newPlayerHp = playerHp;
+        let currentEnemyHp = newEnemyHp;
+        let newPlayerHp = playerHpAfterAbility;
 
         if (currentIntent.type === 'defend') {
           shieldAfterEnemyAction += currentIntent.amount;
@@ -681,20 +749,44 @@ export default function useCombat() {
           playSound('enemyDefend');
         } else {
           const rawDmg = currentIntent.amount;
-          const absorbed = Math.min(shieldAfterGain, rawDmg);
+          const scaledDmg = Math.round(rawDmg * (resolution.incomingDamageMultiplier || 1));
+          const modifiedDmg = Math.max(0, scaledDmg - (resolution.incomingFlatReduction || 0));
+          const absorbed = Math.min(shieldAfterGain, modifiedDmg);
           const shieldAfterHit = shieldAfterGain - absorbed;
-          const taken = rawDmg - absorbed;
-          newPlayerHp = Math.max(0, playerHp - taken);
+          const taken = modifiedDmg - absorbed;
+          newPlayerHp = Math.max(0, playerHpAfterAbility - taken);
+
+          if (modifiedDmg !== rawDmg) {
+            addLog(`  ${ability?.name || 'combo'} reduces incoming ${rawDmg} -> ${modifiedDmg}`);
+          }
 
           if (absorbed > 0) {
-            addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+            addLog(`  ${enemy.name} hits ${modifiedDmg} — shield absorbs ${absorbed}, you take ${taken}`);
           } else {
-            addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
+            addLog(`  ${enemy.name} hits ${modifiedDmg} — no shield, you take ${taken}`);
+          }
+          if (resolution.counterReflectPct && absorbed > 0) {
+            const reflected = Math.round(absorbed * resolution.counterReflectPct);
+            const reflectAbsorbed = Math.min(shieldAfterEnemyAction, reflected);
+            const reflectedToHp = reflected - reflectAbsorbed;
+            shieldAfterEnemyAction -= reflectAbsorbed;
+            currentEnemyHp = Math.max(0, currentEnemyHp - reflectedToHp);
+            setEnemyShield(shieldAfterEnemyAction);
+            setEnemyHp(currentEnemyHp);
+            addLog(`  Counter reflects ${reflected} (${reflectedToHp} to HP)`);
+          }
+          if (resolution.delayedHealIfShieldRemains && shieldAfterHit > 0) {
+            const healed = Math.min(
+              resolution.delayedHealIfShieldRemains,
+              TUNING.player.maxHp - newPlayerHp,
+            );
+            newPlayerHp += healed;
+            if (healed > 0) addLog(`  Renewing Ward heals ${healed} HP`);
           }
           setPlayerShield(shieldAfterHit);
           showCombatBanner({
             eyebrow: enemy.name,
-            title: `Attack ${rawDmg} damage`,
+            title: `Attack ${modifiedDmg} damage`,
             detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
             tone: 'enemy',
           });
@@ -702,6 +794,11 @@ export default function useCombat() {
         }
 
         setPlayerHp(newPlayerHp);
+
+        if (currentEnemyHp <= 0) {
+          triggerVictory(manaAfterResolution, newPlayerHp);
+          return;
+        }
 
         if (newPlayerHp <= 0) {
           setTimeout(() => {
@@ -804,12 +901,15 @@ export default function useCombat() {
   // ----------------------------------------------------------
   // Derived / computed values the UI needs
   // ----------------------------------------------------------
-  const resolutionModifiers = {
-    damageMultiplier: 1 + playerDamageBonusPct,
-    defenceMultiplier: 1 + playerDefenceBonusPct,
-  };
+  const resolutionModifiers = buildResolutionContext();
   const bestCombo = findBestAcceptedSequence(committed, resolutionModifiers);
-  const preview = computeResolution(bestCombo ? bestCombo.tiles : [], resolutionModifiers);
+  const preview = bestCombo || {
+    ...computeResolution([], resolutionModifiers),
+    kind: 'none',
+    heal: 0,
+    manaCost: 0,
+    effects: [],
+  };
   const sequenceValid = isValidSequence(committed);
   const sequenceFull = picksUsed >= pickLimit;
   const rerollsLeftEnemy = Math.max(0, TUNING.draft.maxRerollsPerEnemy - rerollsUsedEnemy);

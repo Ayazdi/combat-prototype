@@ -58,6 +58,131 @@ export const computeResolution = (committed, modifiers = {}) => {
   return { damage, block, mana, segments };
 };
 
+export const getAbilityCombo = (committed) => {
+  const sequence = committed.filter((t) => t !== null && t !== undefined).join('');
+  return TUNING.comboAbilities.find((combo) => combo.pattern === sequence) || null;
+};
+
+export const computeAbilityResolution = (combo, context = {}) => {
+  const damageMultiplier = context.damageMultiplier ?? 1;
+  const defenceMultiplier = context.defenceMultiplier ?? 1;
+  const playerMana = context.playerMana ?? 0;
+  const playerMaxMana = context.playerMaxMana ?? TUNING.player.maxMana;
+  const enemyHp = context.enemyHp ?? 0;
+  const enemyMaxHp = context.enemyMaxHp ?? 1;
+  const scaledDamage = (value) => Math.round(value * damageMultiplier);
+  const scaledBlock = (value) => Math.round(value * defenceMultiplier);
+  const base = {
+    kind: 'ability',
+    ability: combo,
+    tiles: combo.pattern.split(''),
+    sequence: combo.pattern,
+    length: combo.pattern.length,
+    damage: 0,
+    block: 0,
+    mana: 0,
+    heal: 0,
+    manaCost: 0,
+    hits: null,
+    effects: [],
+    segments: [{
+      type: 'ABILITY',
+      count: combo.pattern.length,
+      pattern: combo.pattern,
+      name: combo.name,
+      detail: combo.detail,
+    }],
+  };
+
+  switch (combo.id) {
+    case 'execution': {
+      const executeBonus = enemyHp > 0 && enemyHp <= enemyMaxHp * 0.3 ? 25 : 0;
+      return {
+        ...base,
+        damage: scaledDamage(90 + executeBonus),
+        effects: executeBonus > 0 ? ['execute bonus +25'] : ['execute bonus below 30% HP'],
+      };
+    }
+    case 'iron_wall':
+      return {
+        ...base,
+        block: scaledBlock(30),
+        incomingDamageMultiplier: 0.75,
+        effects: ['incoming attack x0.75'],
+      };
+    case 'mana_surge': {
+      const mana = 15;
+      const overflowShield = Math.max(0, playerMana + mana - playerMaxMana);
+      return {
+        ...base,
+        mana,
+        block: overflowShield,
+        effects: ['mana overflow becomes shield'],
+      };
+    }
+    case 'guarded_strike':
+      return {
+        ...base,
+        damage: scaledDamage(45),
+        block: scaledBlock(18),
+        incomingFlatReduction: 10,
+        effects: ['incoming attack -10'],
+      };
+    case 'mana_blade': {
+      const manaCost = Math.min(10, playerMana);
+      return {
+        ...base,
+        damage: scaledDamage(50 + Math.round(playerMana * 0.2)),
+        manaCost,
+        effects: [`spend ${manaCost} mana`],
+      };
+    }
+    case 'counter_stance':
+      return {
+        ...base,
+        block: scaledBlock(35),
+        counterReflectPct: 0.5,
+        effects: ['reflect 50% of blocked attack damage'],
+      };
+    case 'arcane_barrier':
+      return {
+        ...base,
+        block: scaledBlock(25),
+        mana: 12,
+        shieldCapBonus: 20,
+        effects: ['shield cap +20 this turn'],
+      };
+    case 'spell_flurry': {
+      const hits = [20, 20, 20].map(scaledDamage);
+      return {
+        ...base,
+        damage: hits.reduce((total, hit) => total + hit, 0),
+        hits,
+        effects: ['3 separate hits'],
+      };
+    }
+    case 'renewing_ward':
+      return {
+        ...base,
+        block: scaledBlock(30),
+        delayedHealIfShieldRemains: 12,
+        effects: ['heal 12 if shield remains'],
+      };
+    case 'life_channel': {
+      const manaCost = Math.min(15, playerMana);
+      return {
+        ...base,
+        damage: scaledDamage(25),
+        heal: 10 + manaCost,
+        manaCost,
+        effects: [`spend ${manaCost} mana`, `heal ${10 + manaCost}`],
+      };
+    }
+    default:
+      return base;
+  }
+};
+
 /**
  * Validate the submitted sequence and return its resolution.
  * A submission is valid if it contains at least one contiguous run of
@@ -68,6 +193,11 @@ export const findBestAcceptedSequence = (committed, modifiers = {}) => {
   const filtered = committed.filter((t) => t !== null && t !== undefined);
   if (filtered.length === 0) return null;
 
+  const abilityCombo = getAbilityCombo(filtered);
+  if (abilityCombo) {
+    return computeAbilityResolution(abilityCombo, modifiers);
+  }
+
   const { damage, block, mana, segments } = computeResolution(filtered, modifiers);
 
   const hasValidRun = segments.some(
@@ -77,10 +207,13 @@ export const findBestAcceptedSequence = (committed, modifiers = {}) => {
   if (!hasValidRun) return null;
 
   return {
+    kind: 'basic',
     tiles: filtered,
     damage,
     block,
     mana,
+    heal: 0,
+    manaCost: 0,
     segments,
     length: filtered.length,
     sequence: filtered.join(''),

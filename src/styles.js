@@ -572,6 +572,82 @@ export const styles = {
     letterSpacing: '0.1em',
   },
 
+  // --- Ability combo reference ---
+  comboCodex: {
+    background: 'linear-gradient(180deg, rgba(18, 16, 13, 0.78) 0%, rgba(10, 8, 6, 0.72) 100%)',
+    border: '1px solid #2a2418',
+    padding: '14px 16px',
+    marginBottom: 20,
+    borderRadius: 2,
+  },
+  comboCodexHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+  },
+  comboCodexTitle: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 12,
+    letterSpacing: '0.24em',
+    color: '#d4a24c',
+    fontWeight: 600,
+  },
+  comboCodexHint: {
+    fontSize: 10,
+    color: '#7a7265',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+  },
+  comboCodexGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: 8,
+  },
+  comboCodexItem: {
+    display: 'grid',
+    gridTemplateColumns: '92px 1fr',
+    gap: 10,
+    alignItems: 'center',
+    minHeight: 54,
+    padding: '8px 10px',
+    background: '#11100d',
+    border: '1px solid #2a2418',
+    borderRadius: 2,
+  },
+  comboPattern: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: 3,
+  },
+  comboPatternTile: {
+    height: 20,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#1a1612',
+    border: '1px solid #3a342a',
+    color: '#e8d4a8',
+    fontSize: 11,
+    borderRadius: 2,
+  },
+  comboText: {
+    minWidth: 0,
+  },
+  comboName: {
+    fontSize: 11,
+    color: '#e8d4a8',
+    letterSpacing: '0.08em',
+    fontWeight: 700,
+    marginBottom: 3,
+  },
+  comboDetail: {
+    fontSize: 10,
+    color: '#8a8070',
+    lineHeight: 1.35,
+  },
+
   // --- Battle log ---
   logSection: {
     background: '#0a0806',
