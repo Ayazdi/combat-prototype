@@ -1,161 +1,252 @@
-const TILE_TYPES = ['A', 'D', 'M'];
-
-const handcraftedCombos = {
-  AAAAA: {
-    name: 'Execution',
-    detail: 'Heavy strike. Bonus damage if the enemy is below 30% HP.',
-    effect: 'execution',
-    manaCost: 20,
+// ============================================================
+// ABILITY COMBOS — exactly 6 unlockable 5-card combos
+// ============================================================
+export const ABILITY_COMBOS = [
+  {
+    id: 'combo_aaaaa',
+    pattern: 'AAAAA',
+    name: 'Barrage',
+    detail: 'Apply Burn — enemy takes 15 dmg at the start of your next 2 turns.',
+    effect: 'barrage',
     rarity: 'rare',
   },
-  DDDDD: {
-    name: 'Iron Wall',
-    detail: 'Huge guard. Reduces the incoming attack this turn.',
-    effect: 'iron_wall',
-    manaCost: 15,
+  {
+    id: 'combo_ddddd',
+    pattern: 'DDDDD',
+    name: 'Endure',
+    detail: 'Absorb the next enemy attack completely (1 hit, any damage).',
+    effect: 'endure',
     rarity: 'rare',
   },
-  MMMMM: {
-    name: 'Mana Surge',
-    detail: 'Restore mana. Overflow becomes shield.',
-    effect: 'mana_surge',
-    manaCost: 0,
+  {
+    id: 'combo_aaadd',
+    pattern: 'AAADD',
+    name: 'Press',
+    detail: 'Apply Vulnerable — enemy takes +30% damage next turn.',
+    effect: 'press',
     rarity: 'rare',
   },
-  AADDM: {
-    name: 'Guarded Strike',
-    detail: 'Attack, shield, and reduce the next enemy hit.',
-    effect: 'guarded_strike',
-    manaCost: 10,
-  },
-  MMADA: {
-    name: 'Mana Blade',
-    detail: 'Spend mana to add current-mana scaling to a strike.',
-    effect: 'mana_blade',
-    manaCost: 15,
-  },
-  DDAMA: {
-    name: 'Counter Stance',
-    detail: 'Gain shield and reflect part of blocked attack damage.',
-    effect: 'counter_stance',
-    manaCost: 10,
-  },
-  MMDMD: {
-    name: 'Arcane Barrier',
-    detail: 'Gain mana and shield with a temporary shield-cap boost.',
-    effect: 'arcane_barrier',
-    manaCost: 10,
-  },
-  AMAMA: {
-    name: 'Spell Flurry',
-    detail: 'Three smaller hits. Strong into shield, weaker into armor.',
-    effect: 'spell_flurry',
-    manaCost: 20,
-  },
-  DMMDD: {
-    name: 'Renewing Ward',
-    detail: 'Gain shield, then heal if shield remains after the enemy acts.',
-    effect: 'renewing_ward',
-    manaCost: 10,
-  },
-  MDDMA: {
-    name: 'Life Channel',
-    detail: 'Spend mana to heal, then deal a small hit.',
-    effect: 'life_channel',
-    manaCost: 15,
-  },
-};
-
-const countTiles = (pattern) => TILE_TYPES.reduce((acc, tile) => {
-  acc[tile] = pattern.split(tile).length - 1;
-  return acc;
-}, {});
-
-const hasAlternatingCore = (pattern) => pattern
-  .slice(0, 4)
-  .split('')
-  .every((tile, i, arr) => i === 0 || tile !== arr[i - 1]);
-
-const inferComboTemplate = (pattern) => {
-  const counts = countTiles(pattern);
-  const dominant = TILE_TYPES.reduce((best, tile) => (counts[tile] > counts[best] ? tile : best), 'A');
-  const starts = pattern[0];
-  const ends = pattern[pattern.length - 1];
-
-  if (counts.A >= 4) return {
-    effect: ends === 'M' ? 'mana_blade' : 'execution',
-    name: ends === 'D' ? 'Finishing Guard' : 'Killing Line',
-    detail: ends === 'M' ? 'Attack-heavy finisher with a mana-charged edge.' : 'Attack-heavy finisher with bonus pressure.',
-    manaCost: 20,
+  {
+    id: 'combo_dddaa',
+    pattern: 'DDDAA',
+    name: 'Counter',
+    detail: 'Deal bonus damage equal to half your current shield.',
+    effect: 'counter',
     rarity: 'rare',
-  };
-  if (counts.D >= 4) return {
-    effect: ends === 'A' ? 'counter_stance' : 'iron_wall',
-    name: ends === 'A' ? 'Reversal Guard' : 'Fortress Line',
-    detail: ends === 'A' ? 'Defensive stance that can reflect blocked damage.' : 'Defence-heavy guard that softens the enemy hit.',
-    manaCost: 15,
+  },
+  {
+    id: 'combo_ddaaa',
+    pattern: 'DDAAA',
+    name: 'Riposte',
+    detail: 'Deal bonus damage equal to half the damage you took last turn.',
+    effect: 'riposte',
     rarity: 'rare',
-  };
-  if (counts.M >= 4) return {
-    effect: ends === 'A' ? 'mana_blade' : 'mana_surge',
-    name: ends === 'D' ? 'Warding Surge' : 'Deep Channel',
-    detail: ends === 'A' ? 'Mana-heavy strike that converts focus into damage.' : 'Mana-heavy channel that restores resources.',
-    manaCost: 0,
+  },
+  {
+    id: 'combo_aaddd',
+    pattern: 'AADDD',
+    name: 'Drain',
+    detail: 'Steal up to 20 of the enemy\'s current shield and add it to yours.',
+    effect: 'drain',
     rarity: 'rare',
-  };
-  if (hasAlternatingCore(pattern) && counts.A >= 2 && counts.M >= 2) return {
-    effect: 'spell_flurry',
-    name: 'Spell Flurry',
-    detail: 'Alternating attack and mana releases several smaller hits.',
-    manaCost: 20,
-  };
-  if (counts.D >= 2 && counts.M >= 2) return {
-    effect: starts === 'M' ? 'life_channel' : 'renewing_ward',
-    name: starts === 'M' ? 'Life Channel' : 'Renewing Ward',
-    detail: starts === 'M' ? 'Spend mana to heal, then deal a small hit.' : 'Gain shield, then heal if shield remains after the enemy acts.',
-    manaCost: 15,
-  };
-  if (counts.A >= 2 && counts.D >= 2) return {
-    effect: starts === 'D' ? 'counter_stance' : 'guarded_strike',
-    name: starts === 'D' ? 'Counter Stance' : 'Guarded Strike',
-    detail: starts === 'D' ? 'Gain shield and reflect part of blocked attack damage.' : 'Attack, shield, and reduce the next enemy hit.',
-    manaCost: 10,
-  };
-  if (counts.A >= 2 && counts.M >= 2) return {
-    effect: dominant === 'A' ? 'mana_blade' : 'arcane_bolt',
-    name: dominant === 'A' ? 'Mana Blade' : 'Arcane Bolt',
-    detail: dominant === 'A' ? 'Spend mana to add current-mana scaling to a strike.' : 'Convert mana-heavy focus into a precise attack.',
-    manaCost: 15,
-  };
-  return {
-    effect: dominant === 'D' ? 'arcane_barrier' : dominant === 'M' ? 'mana_surge' : 'guarded_strike',
-    name: dominant === 'D' ? 'Arcane Barrier' : dominant === 'M' ? 'Mana Surge' : 'Guarded Strike',
-    detail: 'Balanced pattern with a flexible combat effect.',
-    manaCost: 10,
-  };
-};
-
-const buildComboAbilityCatalog = () => {
-  const combos = [];
-  const build = (prefix) => {
-    if (prefix.length === 5) {
-      const template = handcraftedCombos[prefix] || inferComboTemplate(prefix);
-      combos.push({
-        id: `combo_${prefix.toLowerCase()}`,
-        pattern: prefix,
-        rarity: 'common',
-        ...template,
-      });
-      return;
-    }
-    TILE_TYPES.forEach((tile) => build(`${prefix}${tile}`));
-  };
-  build('');
-  return combos;
-};
+  },
+];
 
 // ============================================================
-// GAME TUNING - edit these to rebalance without touching logic
+// PASSIVE ABILITIES — 25 passives with prerequisite system
+// requires: string (single ability id) - passive unlocks if that ability is owned
+// requiresAny: string[] - passive unlocks if ANY of these abilities are owned
+// requiresAll: string[] - passive unlocks if ALL of these are owned
+// null requires = universal (always available in pool)
+// ============================================================
+export const PASSIVE_ABILITIES = [
+  // --- Burn (Barrage) specific ---
+  {
+    id: 'kindling',
+    name: 'Kindling',
+    detail: 'Burn deals 25 damage per tick instead of 15.',
+    requires: 'combo_aaaaa',
+    category: 'specific',
+  },
+  {
+    id: 'afterburn',
+    name: 'Afterburn',
+    detail: 'Burn lasts 3 turns instead of 2.',
+    requires: 'combo_aaaaa',
+    category: 'specific',
+  },
+  // --- Endure (DDDDD) specific ---
+  {
+    id: 'retaliate',
+    name: 'Retaliate',
+    detail: 'When Endure absorbs a hit, deal 25 damage back to the enemy.',
+    requires: 'combo_ddddd',
+    category: 'specific',
+  },
+  {
+    id: 'bulwark',
+    name: 'Bulwark',
+    detail: 'After Endure triggers, gain 20 HP.',
+    requires: 'combo_ddddd',
+    category: 'specific',
+  },
+  // --- Press (AAADD) specific ---
+  {
+    id: 'cruelty',
+    name: 'Cruelty',
+    detail: 'Vulnerable increases the damage bonus to +50% instead of +30%.',
+    requires: 'combo_aaadd',
+    category: 'specific',
+  },
+  {
+    id: 'setup',
+    name: 'Setup',
+    detail: 'Press also grants +1 pick next turn.',
+    requires: 'combo_aaadd',
+    category: 'specific',
+  },
+  // --- Counter / Riposte specific ---
+  {
+    id: 'momentum',
+    name: 'Momentum',
+    detail: 'Counter and Riposte bonus multiplier increases from ×0.5 to ×0.8.',
+    requiresAny: ['combo_dddaa', 'combo_ddaaa'],
+    category: 'specific',
+  },
+  // --- Drain (AADDD) specific ---
+  {
+    id: 'leech',
+    name: 'Leech',
+    detail: 'Drain also heals 15 HP.',
+    requires: 'combo_aaddd',
+    category: 'specific',
+  },
+  {
+    id: 'predator',
+    name: 'Predator',
+    detail: 'Drain steals up to 40 shield instead of 20.',
+    requires: 'combo_aaddd',
+    category: 'specific',
+  },
+  // --- Cross-combo ---
+  {
+    id: 'opportunist',
+    name: 'Opportunist',
+    detail: 'If the enemy is Vulnerable when you play Barrage, Burn also triggers immediately.',
+    requiresAll: ['combo_aaaaa', 'combo_aaadd'],
+    category: 'specific',
+  },
+  // --- Universal standalone ---
+  {
+    id: 'tenacity',
+    name: 'Tenacity',
+    detail: 'First time HP drops below 40% each battle, instantly gain 30 shield.',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'second_wind',
+    name: 'Second Wind',
+    detail: 'Recover 10 HP at the start of every 3rd turn.',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'scavenger',
+    name: 'Scavenger',
+    detail: 'Each No Action tile you pick grants 5 MP back.',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'sharpness',
+    name: 'Sharpness',
+    detail: 'Reroll costs 15 MP instead of 25.',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'focused',
+    name: 'Focused',
+    detail: 'Permanently gain +1 pick per turn (6 instead of 5).',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'last_stand',
+    name: 'Last Stand',
+    detail: 'While below 40% HP, all damage dealt is increased by +20%.',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'thick_skin',
+    name: 'Thick Skin',
+    detail: 'All incoming damage reduced by 5 flat.',
+    requires: null,
+    category: 'universal',
+  },
+  {
+    id: 'overflow',
+    name: 'Overflow',
+    detail: 'Shield gained beyond the cap converts to HP at 50% rate.',
+    requires: null,
+    category: 'universal',
+  },
+  // --- Universal multi-ability enhancers ---
+  {
+    id: 'amplifier',
+    name: 'Amplifier',
+    detail: 'All status effects (Burn, Vulnerable) last 1 extra turn.',
+    requires: null,
+    category: 'enhancer',
+  },
+  {
+    id: 'precision',
+    name: 'Precision',
+    detail: 'All ability bonuses increased by 25% (Burn tick, Drain steal, Counter/Riposte bonus).',
+    requires: null,
+    category: 'enhancer',
+  },
+  {
+    id: 'catalyst',
+    name: 'Catalyst',
+    detail: 'Any 5-card ability combo refunds 10 MP.',
+    requires: null,
+    category: 'enhancer',
+  },
+  {
+    id: 'echo',
+    name: 'Echo',
+    detail: 'After any ability triggers, deal 10 bonus damage immediately.',
+    requires: null,
+    category: 'enhancer',
+  },
+  {
+    id: 'resonance',
+    name: 'Resonance',
+    detail: 'Status effects deal 10 damage the moment they are applied.',
+    requires: null,
+    category: 'enhancer',
+  },
+  {
+    id: 'stockpile',
+    name: 'Stockpile',
+    detail: 'Each turn you don\'t play a 5-card ability combo, stack +8 dmg for the next one (max 40).',
+    requires: null,
+    category: 'enhancer',
+  },
+  {
+    id: 'flow_state',
+    name: 'Flow State',
+    detail: 'Two 5-card ability combos in a row grant +2 free picks next turn.',
+    requires: null,
+    category: 'enhancer',
+  },
+];
+
+// ============================================================
+// GAME TUNING
 // ============================================================
 export const TUNING = {
   player: {
@@ -166,9 +257,7 @@ export const TUNING = {
     hpRegenPerFoe: 5,
     startingMana: 100,
   },
-  spells: { maxCastsPerTurn: 1 },
   rewardPerks: {
-    // Scales perk values by kill number. 0.2 makes the second kill's 10% perk become 12%.
     perEnemyGrowthRate: 0.2,
     damageIncreaseBase: 0.10,
     defenceIncreaseBase: 0.10,
@@ -184,30 +273,21 @@ export const TUNING = {
     manaCombos: { 2: 1.4, 3: 1.8, 4: 2.3, 5: 3.0 },
     minComboLength: 3,
   },
-  comboAbilities: buildComboAbilityCatalog(),
-  startingAbilityComboId: 'combo_aaaaa',
-  rewardChoicesPerKill: 2,
+  comboAbilities: ABILITY_COMBOS,
+  rewardChoicesPerKill: 1,
   draft: {
     rowSize: 6,
-    // Base number of selections allowed each turn.
     maxSequence: 5,
-    // Action limits and costs.
     maxRerollsPerEnemy: 1,
     maxDiscardsPerTurn: 2,
     discardManaCost: 5,
     rerollManaCost: 25,
   },
-  // Deck composition per battle - shuffled fresh when a new enemy fight begins.
-  deckComposition: { A: 12, D: 10, M: 8, E: 12 },
+  // M is kept at 0 — tile type still exists in display/logic but never appears in deck
+  deckComposition: { A: 12, D: 10, M: 0, E: 18 },
+  weights: { A: 25, D: 25, M: 0, E: 50 },
   enemyAI: {
-    // Weighted random enemy intent: 2 attacks for each 1 defend on average.
     intentWeights: { attack: 2, defend: 1 },
-  },
-  weights: {
-    A: 25,
-    D: 25,
-    M: 20,
-    E: 50,
   },
   enemies: [
     { id: 1, name: 'Slime', hp: 140, attack: 22, defend: 10, ability: null },

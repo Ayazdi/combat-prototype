@@ -42,7 +42,7 @@ export default function ResultOverlay({
             <div>
               +{victoryReward?.baseManaGain ?? TUNING.player.manaRegenPerFoe} Mana / +{victoryReward?.baseHpGain ?? TUNING.player.hpRegenPerFoe} HP
             </div>
-            <div>Choose {choicesAllowed} rewards ({choicesMade}/{choicesAllowed})</div>
+            <div>Choose {choicesAllowed} reward{choicesAllowed !== 1 ? 's' : ''} ({choicesMade}/{choicesAllowed})</div>
           </div>
         )}
 
@@ -65,6 +65,11 @@ export default function ResultOverlay({
                   className="overlay-btn"
                 >
                   <span style={styles.perkLabel}>{perk.label}</span>
+                  {perk.sublabel && (
+                    <span style={{ fontSize: '0.65rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {perk.sublabel}
+                    </span>
+                  )}
                   <span style={styles.perkDetail}>{perk.detail}</span>
                 </button>
               );

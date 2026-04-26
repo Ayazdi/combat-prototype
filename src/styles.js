@@ -799,6 +799,54 @@ export const styles = {
   perkBtnDisabled: {
     opacity: 0.42,
   },
+  abilitySelectBtn: {
+    minHeight: 120,
+    padding: '14px 12px',
+    background: '#14110e',
+    border: '1px solid #3a342a',
+    color: '#b8a88a',
+    fontFamily: '"JetBrains Mono", monospace',
+    borderRadius: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    textAlign: 'center',
+  },
+
+  // --- Status effect badges ---
+  statusBadges: {
+    display: 'flex',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  statusBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '3px 8px',
+    borderRadius: 2,
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+  },
+  statusBadgeBurn: {
+    background: 'rgba(180, 60, 20, 0.25)',
+    border: '1px solid rgba(200, 80, 30, 0.6)',
+    color: '#e8a060',
+  },
+  statusBadgeVulnerable: {
+    background: 'rgba(160, 120, 20, 0.25)',
+    border: '1px solid rgba(200, 160, 30, 0.6)',
+    color: '#e8d060',
+  },
+  statusBadgeEndure: {
+    background: 'rgba(40, 100, 180, 0.25)',
+    border: '1px solid rgba(60, 130, 220, 0.6)',
+    color: '#80b8e8',
+  },
   perkLabel: {
     fontSize: 12,
     letterSpacing: '0.08em',

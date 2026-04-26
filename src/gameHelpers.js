@@ -1,4 +1,4 @@
-import { TUNING } from './constants';
+import { TUNING, ABILITY_COMBOS, PASSIVE_ABILITIES } from './constants';
 
 export const weightedRoll = (weights) => {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
@@ -59,8 +59,10 @@ export const computeResolution = (committed, modifiers = {}) => {
 };
 
 export const getAbilityCombo = (committed, unlockedAbilityIds = null) => {
-  const sequence = committed.filter((t) => t !== null && t !== undefined).join('');
-  return TUNING.comboAbilities.find((combo) => (
+  const filtered = committed.filter((t) => t !== null && t !== undefined);
+  if (filtered.length !== 5) return null;
+  const sequence = filtered.join('');
+  return ABILITY_COMBOS.find((combo) => (
     combo.pattern === sequence && (!unlockedAbilityIds || unlockedAbilityIds.includes(combo.id))
   )) || null;
 };
@@ -68,121 +70,96 @@ export const getAbilityCombo = (committed, unlockedAbilityIds = null) => {
 export const computeAbilityResolution = (combo, context = {}) => {
   const damageMultiplier = context.damageMultiplier ?? 1;
   const defenceMultiplier = context.defenceMultiplier ?? 1;
-  const playerMana = context.playerMana ?? 0;
-  const playerMaxMana = context.playerMaxMana ?? TUNING.player.maxMana;
-  const enemyHp = context.enemyHp ?? 0;
-  const enemyMaxHp = context.enemyMaxHp ?? 1;
-  const scaledDamage = (value) => Math.round(value * damageMultiplier);
-  const scaledBlock = (value) => Math.round(value * defenceMultiplier);
+  const playerShield = context.playerShield ?? 0;
+  const lastDamageTaken = context.lastDamageTaken ?? 0;
+  const passives = context.passives ?? [];
+  const hasPrecision = passives.includes('precision');
+  const precisionMult = hasPrecision ? 1.25 : 1;
+
+  // Base tile damage/block/mana from the pattern (e.g. AAAAA → 5A damage, DDDAA → DDD block + AA dmg)
+  const { damage: baseTileDmg, block: baseTileBlock, mana: baseTileMana } = computeResolution(
+    combo.pattern.split(''),
+    { damageMultiplier, defenceMultiplier },
+  );
+
   const base = {
     kind: 'ability',
     ability: combo,
     tiles: combo.pattern.split(''),
     sequence: combo.pattern,
     length: combo.pattern.length,
-    damage: 0,
-    block: 0,
-    mana: 0,
+    damage: baseTileDmg,
+    block: baseTileBlock,
+    mana: baseTileMana,
     heal: 0,
-    manaCost: combo.manaCost || 0,
+    manaCost: 0,
     hits: null,
+    statusEffect: null,
+    abilityBonus: 0,
     effects: [],
     segments: [{
       type: 'ABILITY',
-      count: combo.pattern.length,
+      count: 5,
       pattern: combo.pattern,
       name: combo.name,
       detail: combo.detail,
     }],
   };
 
+  const scaledDamage = (v) => Math.round(v * damageMultiplier);
+
   switch (combo.effect) {
-    case 'execution': {
-      const executeBonus = enemyHp > 0 && enemyHp <= enemyMaxHp * 0.3 ? 25 : 0;
+    case 'barrage': {
       return {
         ...base,
-        damage: scaledDamage(90 + executeBonus),
-        effects: executeBonus > 0 ? ['execute bonus +25'] : ['execute bonus below 30% HP'],
+        statusEffect: { type: 'burn' },
+        effects: ['Apply Burn'],
       };
     }
-    case 'iron_wall':
+    case 'endure':
       return {
         ...base,
-        block: scaledBlock(30),
-        incomingDamageMultiplier: 0.75,
-        effects: ['incoming attack x0.75'],
+        statusEffect: { type: 'endure' },
+        effects: ['Absorb next enemy hit'],
       };
-    case 'mana_surge': {
-      const mana = 15;
-      const overflowShield = Math.max(0, playerMana + mana - playerMaxMana);
+    case 'press':
       return {
         ...base,
-        mana,
-        block: overflowShield,
-        effects: ['mana overflow becomes shield'],
+        statusEffect: { type: 'vulnerable' },
+        effects: ['Apply Vulnerable'],
       };
-    }
-    case 'guarded_strike':
+    case 'counter': {
+      const hasMomentum = passives.includes('momentum');
+      const mult = hasMomentum ? 0.8 : 0.5;
+      const bonusDmg = Math.round(playerShield * mult * precisionMult);
       return {
         ...base,
-        damage: scaledDamage(45),
-        block: scaledBlock(18),
-        incomingFlatReduction: 10,
-        effects: ['incoming attack -10'],
-      };
-    case 'mana_blade': {
-      return {
-        ...base,
-        damage: scaledDamage(50 + Math.round(playerMana * 0.2)),
-        effects: [`spend ${base.manaCost} mana`],
+        damage: baseTileDmg + scaledDamage(bonusDmg),
+        abilityBonus: bonusDmg,
+        effects: [`Counter bonus: +${bonusDmg} dmg (from ${playerShield} shield)`],
       };
     }
-    case 'counter_stance':
+    case 'riposte': {
+      const hasMomentum = passives.includes('momentum');
+      const mult = hasMomentum ? 0.8 : 0.5;
+      const bonusDmg = Math.round(lastDamageTaken * mult * precisionMult);
       return {
         ...base,
-        block: scaledBlock(35),
-        counterReflectPct: 0.5,
-        effects: ['reflect 50% of blocked attack damage'],
-      };
-    case 'arcane_barrier':
-      return {
-        ...base,
-        block: scaledBlock(25),
-        mana: 12,
-        shieldCapBonus: 20,
-        effects: ['shield cap +20 this turn'],
-      };
-    case 'spell_flurry': {
-      const hits = [20, 20, 20].map(scaledDamage);
-      return {
-        ...base,
-        damage: hits.reduce((total, hit) => total + hit, 0),
-        hits,
-        effects: ['3 separate hits'],
+        damage: baseTileDmg + scaledDamage(bonusDmg),
+        abilityBonus: bonusDmg,
+        effects: [`Riposte bonus: +${bonusDmg} dmg (from ${lastDamageTaken} last hit)`],
       };
     }
-    case 'renewing_ward':
+    case 'drain': {
+      const hasPredator = passives.includes('predator');
+      const stealAmount = hasPredator ? 40 : 20;
+      const stealAmountScaled = Math.round(stealAmount * precisionMult);
       return {
         ...base,
-        block: scaledBlock(30),
-        delayedHealIfShieldRemains: 12,
-        effects: ['heal 12 if shield remains'],
-      };
-    case 'life_channel': {
-      return {
-        ...base,
-        damage: scaledDamage(25),
-        heal: 10 + base.manaCost,
-        effects: [`spend ${base.manaCost} mana`, `heal ${10 + base.manaCost}`],
+        abilityBonus: stealAmountScaled,
+        effects: [`Drain: steal up to ${stealAmountScaled} enemy shield`],
       };
     }
-    case 'arcane_bolt':
-      return {
-        ...base,
-        damage: scaledDamage(35 + Math.round(playerMana * 0.1)),
-        mana: 5,
-        effects: ['precise mana strike'],
-      };
     default:
       return base;
   }
@@ -191,7 +168,8 @@ export const computeAbilityResolution = (combo, context = {}) => {
 /**
  * Validate the submitted sequence and return its resolution.
  * A submission is valid if it contains at least one contiguous run of
- * ≥ TUNING.tiles.minComboLength identical tiles of type A, D, or M.
+ * >= TUNING.tiles.minComboLength identical tiles of type A, D, or M,
+ * or if a 5-card ability combo is matched.
  * Returns null when invalid.
  */
 export const findBestAcceptedSequence = (committed, modifiers = {}) => {
@@ -199,7 +177,7 @@ export const findBestAcceptedSequence = (committed, modifiers = {}) => {
   if (filtered.length === 0) return null;
 
   const abilityCombo = getAbilityCombo(filtered, modifiers.unlockedAbilityIds);
-  if (abilityCombo && (modifiers.playerMana ?? 0) >= (abilityCombo.manaCost || 0)) {
+  if (abilityCombo) {
     return computeAbilityResolution(abilityCombo, modifiers);
   }
 
@@ -243,7 +221,7 @@ export const abilityDescription = (key) => {
 
 /**
  * Build and return a shuffled deck array from a composition object.
- * e.g. { A: 10, D: 8, E: 22 } → 40-element shuffled array.
+ * e.g. { A: 10, D: 8, E: 22 } -> 40-element shuffled array.
  */
 export const buildShuffledDeck = (composition) => {
   const deck = [];
@@ -269,4 +247,12 @@ export const drawFromDeck = (deck, fallbackComposition) => {
   const d = reshuffled ? buildShuffledDeck(fallbackComposition) : deck;
   const card = d[d.length - 1];
   return { card, deck: d.slice(0, -1), reshuffled };
+};
+
+/** Check if a passive's requirements are met given owned ability combo IDs */
+export const isPassiveAvailable = (passive, ownedAbilityIds) => {
+  if (passive.requiresAll) return passive.requiresAll.every((r) => ownedAbilityIds.includes(r));
+  if (passive.requiresAny) return passive.requiresAny.some((r) => ownedAbilityIds.includes(r));
+  if (passive.requires) return ownedAbilityIds.includes(passive.requires);
+  return true; // universal passives always available
 };

@@ -15,6 +15,7 @@ export default function Combatants({
   enemyShield,
   enemyTelegraph,
   enemyIntentQueue,
+  statusEffects,
 }) {
   return (
     <section style={styles.combatants}>
@@ -44,6 +45,13 @@ export default function Combatants({
           max={TUNING.player.maxShield}
           gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
         />
+
+        {/* Player status badges (Endure) */}
+        {statusEffects?.endure && (
+          <div style={styles.statusBadges}>
+            <span style={{ ...styles.statusBadge, ...styles.statusBadgeEndure }}>🛡 ENDURE</span>
+          </div>
+        )}
       </div>
 
       {/* ---- Versus divider ---- */}
@@ -89,6 +97,22 @@ export default function Combatants({
           max={Math.max(enemy.hp, 1)}
           gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
         />
+
+        {/* Enemy status badges (Burn, Vulnerable) */}
+        {(statusEffects?.burn || statusEffects?.vulnerable) && (
+          <div style={{ ...styles.statusBadges, justifyContent: 'flex-end' }}>
+            {statusEffects.burn && statusEffects.burn.turnsLeft > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeBurn }}>
+                🔥 {statusEffects.burn.turnsLeft} · {statusEffects.burn.tickDamage} dmg
+              </span>
+            )}
+            {statusEffects.vulnerable && statusEffects.vulnerable.turnsLeft > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeVulnerable }}>
+                🎯 VULN {statusEffects.vulnerable.turnsLeft}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Enemy telegraph — shows optional status + current and next intents */}
         <div style={styles.telegraph}>
