@@ -1,20 +1,23 @@
 import useCombat from './useCombat';
 import { styles, globalCss } from './styles';
+import { PASSIVE_ABILITIES } from './constants';
 
 // Sub-components — each handles one visual section of the UI
 import Header from './components/Header';
 import Combatants from './components/Combatants';
 import DraftArea from './components/DraftArea';
+import AbilityCombos from './components/AbilityCombos';
 import CommittedSequence from './components/CommittedSequence';
 import CombatLog from './components/CombatLog';
 import CombatBanner from './components/CombatBanner';
 import ResultOverlay from './components/ResultOverlay';
+import AbilitySelectOverlay from './components/AbilitySelectOverlay';
 
 // ============================================================
 // DraftCombat — top-level layout shell.
 //
 // All game state lives in the useCombat() hook.
-// This component simply wires state → child components.
+// This component simply wires state -> child components.
 // ============================================================
 export default function DraftCombat() {
   const { state, actions } = useCombat();
@@ -41,6 +44,7 @@ export default function DraftCombat() {
           enemyShield={state.enemyShield}
           enemyTelegraph={state.enemyTelegraph}
           enemyIntentQueue={state.enemyIntentQueue}
+          statusEffects={state.statusEffects}
         />
 
         {/* Tile draft row + reroll / discard / submit controls */}
@@ -49,8 +53,8 @@ export default function DraftCombat() {
           currentRow={state.currentRow}
           boardCardAnimationKeys={state.boardCardAnimationKeys}
           rerollsLeftEnemy={state.rerollsLeftEnemy}
+          discardsLeftEnemy={state.discardsLeftEnemy}
           playerMana={state.playerMana}
-          discardCost={state.discardCost}
           deckSize={state.deckSize}
           deckCounts={state.deckCounts}
           deckShuffleCount={state.deckShuffleCount}
@@ -66,6 +70,14 @@ export default function DraftCombat() {
           onDiscardSelected={actions.discardSelected}
           onDiscardBoardTile={actions.discardBoardTile}
           onSubmit={actions.submitSequence}
+        />
+
+        {/* Ability combo + passive reference */}
+        <AbilityCombos
+          combos={state.unlockedAbilityCombos}
+          passives={state.playerPassives.map((id) => PASSIVE_ABILITIES.find((p) => p.id === id)).filter(Boolean)}
+          totalCombos={state.totalAbilityComboCount}
+          totalPassives={PASSIVE_ABILITIES.length}
         />
 
         {/* Committed tile sequence + live damage/block preview */}
@@ -90,11 +102,19 @@ export default function DraftCombat() {
           enemy={state.enemy}
           enemyIdx={state.enemyIdx}
           victoryReward={state.victoryReward}
-          selectedPerkKey={state.selectedPerkKey}
+          selectedRewardKeys={state.selectedRewardKeys}
           onApplyPerk={actions.applyPerk}
           onRestart={actions.restart}
           onNextEnemy={actions.nextEnemy}
         />
+
+        {/* Starting ability selection overlay */}
+        {state.phase === 'ability_select' && (
+          <AbilitySelectOverlay
+            options={state.startingAbilityOptions}
+            onSelect={actions.selectStartingAbility}
+          />
+        )}
       </div>
     </div>
   );

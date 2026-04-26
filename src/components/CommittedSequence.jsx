@@ -33,6 +33,24 @@ export default function CommittedSequence({
           <span style={styles.previewDmg}>⚔ {preview.damage}</span>
           <span style={styles.previewSep}>·</span>
           <span style={styles.previewBlk}>⛨ {preview.block}</span>
+          {preview.mana > 0 && (
+            <>
+              <span style={styles.previewSep}>·</span>
+              <span style={{ color: '#c4a8e8', fontWeight: 600 }}>✦ +{preview.mana} mana</span>
+            </>
+          )}
+          {preview.manaCost > 0 && (
+            <>
+              <span style={styles.previewSep}> / </span>
+              <span style={{ color: '#7a9ed8', fontWeight: 600 }}>-{preview.manaCost} mana</span>
+            </>
+          )}
+          {preview.heal > 0 && (
+            <>
+              <span style={styles.previewSep}> / </span>
+              <span style={{ color: '#8ad88a', fontWeight: 600 }}>+{preview.heal} HP</span>
+            </>
+          )}
         </span>
       </div>
 
@@ -41,7 +59,7 @@ export default function CommittedSequence({
         {Array.from({ length: slotCount }).map((_, i) => {
           const tile = committed[i];
           const isCard = tile !== undefined && tile !== null;
-          const isActionTile = tile === 'A' || tile === 'D';
+          const isActionTile = tile === 'A' || tile === 'D' || tile === 'M';
           const isEmptyCard = tile === 'E';
           const isUnfilled = tile === undefined || tile === null;
           const isEmptyCell = isUnfilled;
@@ -106,8 +124,10 @@ export default function CommittedSequence({
         ) : (
           preview.segments.map((s, i) => (
             <span key={i} style={styles.segChip}>
+              {s.type === 'ABILITY' && `${s.pattern} ${s.name}`}
               {s.type === 'A' && `${'A'.repeat(s.count)} ×${s.mult} = ${s.damage}`}
               {s.type === 'D' && `${'D'.repeat(s.count)} ×${s.mult} = ${s.block}`}
+              {s.type === 'M' && `${'M'.repeat(s.count)} ×${s.mult} = +${s.mana}mp`}
               {s.type === 'E' && 'NO ACTION'}
             </span>
           ))

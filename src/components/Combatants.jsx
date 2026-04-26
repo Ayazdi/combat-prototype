@@ -1,4 +1,5 @@
 import { TUNING } from '../constants';
+import { abilityDescription } from '../gameHelpers';
 import { styles } from '../styles';
 
 // ============================================================
@@ -14,12 +15,14 @@ export default function Combatants({
   enemyShield,
   enemyTelegraph,
   enemyIntentQueue,
+  statusEffects,
 }) {
   return (
     <section style={styles.combatants}>
       {/* ---- Player stats ---- */}
       <div style={styles.combatant}>
         <div style={styles.combatantLabel}>YOU · Lv1</div>
+        <div style={styles.statsLine}>ATK {TUNING.tiles.attackBase} · DEF {TUNING.tiles.defenceBase}</div>
 
         {/* HP bar */}
         <StatBar
@@ -42,6 +45,13 @@ export default function Combatants({
           max={TUNING.player.maxShield}
           gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
         />
+
+        {/* Player status badges (Endure) */}
+        {statusEffects?.endure && (
+          <div style={styles.statusBadges}>
+            <span style={{ ...styles.statusBadge, ...styles.statusBadgeEndure }}>🛡 ENDURE</span>
+          </div>
+        )}
       </div>
 
       {/* ---- Versus divider ---- */}
@@ -53,9 +63,24 @@ export default function Combatants({
 
       {/* ---- Enemy stats ---- */}
       <div style={styles.combatant}>
-        <div style={{ ...styles.combatantLabel, textAlign: 'right' }}>
+        <div style={{ ...styles.combatantLabel, textAlign: 'right', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
           {enemy.name.toUpperCase()} · Lv{enemy.id}
+          {enemy.ability && (
+            <span className="ability-wrap" style={styles.abilityWrap}>
+              <span
+                className="ability-badge"
+                style={styles.abilityBadge}
+                title={abilityDescription(enemy.ability)}
+              >
+                ⓘ
+              </span>
+              <span className="ability-tooltip" style={styles.abilityTooltip}>
+                {abilityDescription(enemy.ability)}
+              </span>
+            </span>
+          )}
         </div>
+        <div style={{ ...styles.statsLine, textAlign: 'right' }}>ATK {enemy.attack} · DEF {enemy.defend}</div>
 
         {/* Enemy HP bar */}
         <StatBar
@@ -72,6 +97,22 @@ export default function Combatants({
           max={Math.max(enemy.hp, 1)}
           gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
         />
+
+        {/* Enemy status badges (Burn, Vulnerable) */}
+        {(statusEffects?.burn || statusEffects?.vulnerable) && (
+          <div style={{ ...styles.statusBadges, justifyContent: 'flex-end' }}>
+            {statusEffects.burn && statusEffects.burn.turnsLeft > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeBurn }}>
+                🔥 {statusEffects.burn.turnsLeft} · {statusEffects.burn.tickDamage} dmg
+              </span>
+            )}
+            {statusEffects.vulnerable && statusEffects.vulnerable.turnsLeft > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeVulnerable }}>
+                🎯 VULN {statusEffects.vulnerable.turnsLeft}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Enemy telegraph — shows optional status + current and next intents */}
         <div style={styles.telegraph}>
@@ -100,6 +141,8 @@ export default function Combatants({
 // the player and enemy panels.
 // ============================================================
 function StatBar({ label, current, max, gradient }) {
+  const widthPct = Math.max(0, Math.min(100, (current / max) * 100));
+
   return (
     <div style={styles.statBar}>
       <div style={styles.statLabel}>{label}</div>
@@ -107,7 +150,7 @@ function StatBar({ label, current, max, gradient }) {
         <div
           style={{
             ...styles.barFill,
-            width: `${(current / max) * 100}%`,
+            width: `${widthPct}%`,
             background: gradient,
           }}
         />

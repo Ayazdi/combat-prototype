@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { TUNING } from './constants';
-import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, findBestAcceptedSequence } from './gameHelpers';
+import { TUNING, ABILITY_COMBOS, PASSIVE_ABILITIES } from './constants';
+import { buildShuffledDeck, drawFromDeck, computeResolution, isValidSequence, findBestAcceptedSequence, isPassiveAvailable } from './gameHelpers';
 import { playSound } from './soundEffects';
 
 // ============================================================
@@ -22,6 +22,31 @@ export default function useCombat() {
   const [enemyHp, setEnemyHp] = useState(TUNING.enemies[0].hp);
   const [enemyShield, setEnemyShield] = useState(0);
 
+  // --- Abilities and passives ---
+  const [playerAbilityComboIds, setPlayerAbilityComboIds] = useState([]);
+  const [playerPassives, setPlayerPassives] = useState([]);
+
+  // Starting ability selection (4 random from 6 each run)
+  const [startingAbilityOptions, setStartingAbilityOptions] = useState(() =>
+    [...ABILITY_COMBOS].sort(() => Math.random() - 0.5).slice(0, 4),
+  );
+  const [gameResetCount, setGameResetCount] = useState(0);
+  const isFirstBattleRef = useRef(true);
+
+  // --- Status effects ---
+  // burn: null | { turnsLeft, tickDamage }
+  // vulnerable: null | { turnsLeft, bonusPct }
+  // endure: boolean
+  const [statusEffects, setStatusEffects] = useState({ burn: null, vulnerable: null, endure: false });
+  const statusEffectsRef = useRef({ burn: null, vulnerable: null, endure: false });
+
+  // --- Combat tracking ---
+  const [lastDamageTaken, setLastDamageTaken] = useState(0);
+  const [stockpileStacks, setStockpileStacks] = useState(0);
+  const [lastWasFiveCardCombo, setLastWasFiveCardCombo] = useState(false);
+  const [tenacityTriggeredThisBattle, setTenacityTriggeredThisBattle] = useState(false);
+  const [setupBonusPicks, setSetupBonusPicks] = useState(0);
+
   // --- Turn / draft tracking ---
   const [turn, setTurn] = useState(1);
   const [round, setRound] = useState(1);
@@ -37,6 +62,7 @@ export default function useCombat() {
     Array.from({ length: TUNING.draft.maxSequence }, () => 0),
   );
   const [rerollsUsedEnemy, setRerollsUsedEnemy] = useState(0);
+  const [discardsUsedEnemy, setDiscardsUsedEnemy] = useState(0);
   // Persistent battle deck — rebuilt fresh at the start of each enemy fight.
   const [deck, setDeck] = useState([]);
   const [deckShuffleCount, setDeckShuffleCount] = useState(1);
@@ -44,13 +70,13 @@ export default function useCombat() {
 
   // --- UI / phase state ---
   const [log, setLog] = useState([]);
-  const [phase, setPhase] = useState('drafting'); // drafting | resolving | victory | defeat
+  const [phase, setPhase] = useState('ability_select'); // ability_select | drafting | resolving | victory | defeat
   const [incomingDamage, setIncomingDamage] = useState(0);
   const [enemyTelegraph, setEnemyTelegraph] = useState('');
   const [enemyIntentQueue, setEnemyIntentQueue] = useState([]);
   const [combatBanner, setCombatBanner] = useState(null);
   const [victoryReward, setVictoryReward] = useState(null);
-  const [selectedPerkKey, setSelectedPerkKey] = useState(null);
+  const [selectedRewardKeys, setSelectedRewardKeys] = useState([]);
 
   // Ref used to auto-scroll the battle log
   const logEndRef = useRef(null);
@@ -81,18 +107,32 @@ export default function useCombat() {
     }
   };
 
-  const formatPlayerAction = (damage, block) => {
-    if (damage > 0 && block > 0) return `Player attacked ${damage} and shielded ${block}`;
-    if (damage > 0) return `Player attacked ${damage}`;
-    if (block > 0) return `Player shielded ${block}`;
-    return 'Player took no action';
+  /** Update status effects in both state and ref atomically */
+  const updateStatusEffects = (updater) => {
+    setStatusEffects((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      statusEffectsRef.current = next;
+      return next;
+    });
   };
+
+  const buildResolutionContext = () => ({
+    damageMultiplier: 1 + playerDamageBonusPct,
+    defenceMultiplier: 1 + playerDefenceBonusPct,
+    playerMana,
+    playerMaxMana: TUNING.player.maxMana,
+    playerShield,
+    lastDamageTaken,
+    enemyHp,
+    enemyMaxHp: enemy.hp,
+    unlockedAbilityIds: playerAbilityComboIds,
+    passives: playerPassives,
+  });
 
   /** Return the deck composition for this battle, adjusted for the enemy passive. */
   const getBattleDeckComposition = () => {
     const base = { ...TUNING.deckComposition };
     if (enemy.ability === 'empty_plus') {
-      // Mage: shift 4 cards into No Action while keeping the deck at 40 cards.
       base.E += 4;
       base.A = Math.max(1, base.A - 2);
       base.D = Math.max(1, base.D - 2);
@@ -103,7 +143,7 @@ export default function useCombat() {
   /**
    * Shuffle a fresh deck for this battle and draw the initial card pool.
    * Returns [remainingDeck, initialPool].
-   * Builds initial 8-tile board from the shuffled deck.
+   * Builds initial rowSize-tile board from the shuffled deck.
    */
   const buildBattleDeck = () => {
     const composition = getBattleDeckComposition();
@@ -117,54 +157,53 @@ export default function useCombat() {
     return [workingDeck, initialPool];
   };
 
-  /** Return the mana cost to discard (doubled by Witch passive) */
-  const getDiscardCost = () => {
-    return enemy.ability === 'double_discard'
-      ? TUNING.draft.discardCost * 2
-      : TUNING.draft.discardCost;
-  };
+  const buildRewardOptions = (defeatedEnemyIndex, ownedAbilityIds = [], ownedPassiveIds = []) => {
+    const scale = 1 + defeatedEnemyIndex * TUNING.rewardPerks.perEnemyGrowthRate;
+    const formatPercent = (v) => `${Math.round(v * 100)}%`;
 
-  const getPerkScale = (defeatedEnemyIndex) => {
-    return 1 + defeatedEnemyIndex * TUNING.rewardPerks.perEnemyGrowthRate;
-  };
+    // Ability combos not yet owned
+    const availableAbilities = ABILITY_COMBOS
+      .filter((c) => !ownedAbilityIds.includes(c.id))
+      .map((c) => ({
+        key: `ability:${c.id}`,
+        kind: 'ability',
+        abilityId: c.id,
+        label: `${c.name}`,
+        sublabel: c.pattern,
+        detail: c.detail,
+      }));
 
-  const formatPercent = (value) => {
-    return `${Math.round(value * 100)}%`;
-  };
+    // Passives whose requirements are met and not yet owned
+    const availablePassives = PASSIVE_ABILITIES
+      .filter((p) => !ownedPassiveIds.includes(p.id) && isPassiveAvailable(p, ownedAbilityIds))
+      .map((p) => ({
+        key: `passive:${p.id}`,
+        kind: 'passive',
+        passiveId: p.id,
+        label: p.name,
+        sublabel: p.category === 'specific' ? 'Specific' : p.category === 'enhancer' ? 'Enhancer' : 'Universal',
+        detail: p.detail,
+      }));
 
-  const buildPerkOptions = (defeatedEnemyIndex) => {
-    const scale = getPerkScale(defeatedEnemyIndex);
+    // Stat perks as fallback
     const damageIncrease = TUNING.rewardPerks.damageIncreaseBase * scale;
     const defenceIncrease = TUNING.rewardPerks.defenceIncreaseBase * scale;
     const manaBonus = Math.round(TUNING.rewardPerks.manaBonusBase * scale);
     const hpBonus = Math.round(TUNING.rewardPerks.hpBonusBase * scale);
-
-    return [
-      {
-        key: 'damage',
-        label: `+${formatPercent(damageIncrease)} Damage`,
-        detail: 'Future attacks hit harder',
-        amount: damageIncrease,
-      },
-      {
-        key: 'defence',
-        label: `+${formatPercent(defenceIncrease)} Defence`,
-        detail: 'Future shield gains improve',
-        amount: defenceIncrease,
-      },
-      {
-        key: 'mana',
-        label: `+${manaBonus} Mana`,
-        detail: 'Restore mana up to max',
-        amount: manaBonus,
-      },
-      {
-        key: 'hp',
-        label: `+${hpBonus} HP`,
-        detail: 'Restore HP up to max',
-        amount: hpBonus,
-      },
+    const statPerks = [
+      { key: 'damage', kind: 'stat', label: `+${formatPercent(damageIncrease)} Damage`, sublabel: 'Stat', detail: 'Future attacks hit harder', amount: damageIncrease },
+      { key: 'defence', kind: 'stat', label: `+${formatPercent(defenceIncrease)} Defence`, sublabel: 'Stat', detail: 'Future shield gains improve', amount: defenceIncrease },
+      { key: 'mana', kind: 'stat', label: `+${manaBonus} Mana`, sublabel: 'Stat', detail: 'Restore mana up to max', amount: manaBonus },
+      { key: 'hp', kind: 'stat', label: `+${hpBonus} HP`, sublabel: 'Stat', detail: 'Restore HP up to max', amount: hpBonus },
     ];
+
+    // Pool: abilities + passives first, stat perks fill gaps
+    const primaryPool = [...availableAbilities, ...availablePassives].sort(() => Math.random() - 0.5);
+    const shuffledStats = statPerks.sort(() => Math.random() - 0.5);
+    const pool = [...primaryPool, ...shuffledStats];
+
+    // Return exactly 4 distinct options
+    return pool.slice(0, 4);
   };
 
   /** Enemy defend amount is explicit per enemy definition. */
@@ -223,7 +262,7 @@ export default function useCombat() {
   // ----------------------------------------------------------
 
   /** Reset draft state and initialize telegraphed enemy intents for a new turn */
-  const startTurn = (turnNum, queueOverride = null) => {
+  const startTurn = (turnNum, queueOverride = null, extraPickBonus = 0) => {
     const queue = buildIntentQueue(turnNum, queueOverride || enemyIntentQueue);
     setEnemyIntentQueue(queue);
 
@@ -243,8 +282,15 @@ export default function useCombat() {
     setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
     setSelectedCommittedIndex(null);
     setPicksUsed(0);
-    setPickLimit(TUNING.draft.maxSequence);
+
+    // Base pick limit + Focused passive (+1) + extra bonus from Flow State or Setup
+    const hasFocused = playerPassives.includes('focused');
+    const baseLimit = TUNING.draft.maxSequence + (hasFocused ? 1 : 0) + extraPickBonus;
+    setPickLimit(baseLimit);
+    setSetupBonusPicks(0);
+
     if (turnNum === 1) setRerollsUsedEnemy(0);
+    setDiscardsUsedEnemy(0);
     setRound(1);
     setPhase('drafting');
   };
@@ -253,7 +299,7 @@ export default function useCombat() {
   // Effects
   // ----------------------------------------------------------
 
-  /** When the enemy changes, announce and start the first turn */
+  /** When the enemy changes (or game resets), set up the battle and optionally show ability select */
   useEffect(() => {
     // Build a fresh deck and initial card pool for this battle.
     const [newDeck, initialPool] = buildBattleDeck();
@@ -264,11 +310,23 @@ export default function useCombat() {
     setDeckShuffleCount(1);
     enemyIntentBagRef.current = [];
     setEnemyShield(0);
+    setDiscardsUsedEnemy(0);
+    setTenacityTriggeredThisBattle(false);
+    setLastDamageTaken(0);
+    setStockpileStacks(0);
+    setLastWasFiveCardCombo(false);
+    updateStatusEffects({ burn: null, vulnerable: null, endure: false });
     const initialQueue = buildIntentQueue(1);
     setEnemyIntentQueue(initialQueue);
-    startTurn(1, initialQueue);
+
+    if (isFirstBattleRef.current) {
+      // Show ability selection before starting the first fight
+      setPhase('ability_select');
+    } else {
+      startTurn(1, initialQueue);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enemyIdx]);
+  }, [enemyIdx, gameResetCount]);
 
   /** Keep the battle log scrolled to the bottom */
   useEffect(() => {
@@ -280,8 +338,8 @@ export default function useCombat() {
   // ----------------------------------------------------------
 
   /**
-   * Pick one tile from the 4-card draft pool.
-   * The picked slot is immediately replaced using weighted roll.
+   * Pick one tile from the draft pool.
+   * The picked slot is immediately replaced by drawing from the deck.
    */
   const pickTile = (idx) => {
     if (phase !== 'drafting') return;
@@ -310,6 +368,11 @@ export default function useCombat() {
     // New picks become the currently selected committed tile.
     setSelectedCommittedIndex(placedIndex);
     setPicksUsed((v) => v + 1);
+
+    // Scavenger: gain 5 MP when picking an E tile
+    if (tile === 'E' && playerPassives.includes('scavenger')) {
+      setPlayerMana((m) => Math.min(TUNING.player.maxMana, m + 5));
+    }
 
     setRound((r) => r + 1);
 
@@ -341,17 +404,14 @@ export default function useCombat() {
     if (committed.length === 0) return;
     playSound('submit');
 
-    const bestCombo = findBestAcceptedSequence(committed, {
-      damageMultiplier: 1 + playerDamageBonusPct,
-      defenceMultiplier: 1 + playerDefenceBonusPct,
-    });
+    const bestCombo = findBestAcceptedSequence(committed, buildResolutionContext());
 
     if (bestCombo) {
       if (bestCombo.sequence !== committed.join('')) {
         addLog(`T${turn}: best combo found in hand -> ${bestCombo.sequence}`);
       }
       // Resolve using the strongest accepted combo found in the submitted hand.
-      resolveTurn(bestCombo.tiles);
+      resolveTurn(bestCombo);
     } else {
       // Invalid sequence — log the failure and punish the player
       addLog(`T${turn}: INVALID sequence [${committed.join('')}] — no damage, no block`);
@@ -359,12 +419,13 @@ export default function useCombat() {
     }
   };
 
-  /** Spend mana to reroll the board without ending the turn or spending a pick. */
+  /** Reroll the board without ending the turn or spending a pick. Costs mana, limited per enemy. */
   const reroll = () => {
     if (phase !== 'drafting') return;
     if (rerollsUsedEnemy >= TUNING.draft.maxRerollsPerEnemy) return;
-    if (playerMana < TUNING.draft.rerollCost) return;
-    setPlayerMana((m) => m - TUNING.draft.rerollCost);
+    const rerollCost = playerPassives.includes('sharpness') ? 15 : TUNING.draft.rerollManaCost;
+    if (playerMana < rerollCost) return;
+    setPlayerMana((mana) => mana - rerollCost);
     playSound('reroll');
     // Draw rowSize fresh cards from the persistent battle deck (replaces whole pool).
     // Reroll intentionally does not change turn, round, picks used, or pick limit.
@@ -383,6 +444,7 @@ export default function useCombat() {
     setCurrentRow(newPool);
     setBoardCardAnimationKeys((keys) => keys.map((key) => key + 1));
     setRerollsUsedEnemy((v) => v + 1);
+    addLog(`T${turn}: reroll board (-${rerollCost} MP)`);
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
       addLog(`  ${enemy.name} adapts: +25 shield (reroll)`);
@@ -399,7 +461,7 @@ export default function useCombat() {
   };
 
   /**
-   * Spend mana to permanently discard one selected committed tile.
+   * Permanently discard one selected committed tile (mana cost, limited per turn).
    * Discard grants +1 extra selection budget this turn.
    */
   const discardSelected = () => {
@@ -411,10 +473,12 @@ export default function useCombat() {
     const discardedCard = committed[discardIndex];
     if (discardedCard === undefined || discardedCard === null) return;
 
-    const cost = getDiscardCost();
-    if (playerMana < cost) return;
+    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerTurn;
+    if (discardsUsedEnemy >= maxDiscards) return;
+    if (playerMana < TUNING.draft.discardManaCost) return;
 
-    setPlayerMana((m) => m - cost);
+    setDiscardsUsedEnemy((v) => v + 1);
+    setPlayerMana((mana) => mana - TUNING.draft.discardManaCost);
     playSound('discard');
 
     setCommitted((c) => {
@@ -427,22 +491,25 @@ export default function useCombat() {
     // Discard allows one additional pick this turn.
     setPickLimit((limit) => limit + 1);
     setSelectedCommittedIndex(null);
+    addLog(`T${turn}: discard committed ${discardedCard} (-${TUNING.draft.discardManaCost} MP)`);
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
       addLog(`  ${enemy.name} adapts: +25 shield (discard)`);
     }
   };
 
-  /** Spend mana to permanently discard one visible board card. */
+  /** Permanently discard one visible board card (mana cost, limited per turn). */
   const discardBoardTile = (index) => {
     if (phase !== 'drafting') return;
     if (index < 0 || index >= currentRow.length) return;
     if (currentRow[index] === undefined || currentRow[index] === null) return;
 
-    const cost = getDiscardCost();
-    if (playerMana < cost) return;
+    const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerTurn;
+    if (discardsUsedEnemy >= maxDiscards) return;
+    if (playerMana < TUNING.draft.discardManaCost) return;
 
-    setPlayerMana((m) => m - cost);
+    setDiscardsUsedEnemy((v) => v + 1);
+    setPlayerMana((mana) => mana - TUNING.draft.discardManaCost);
     playSound('discard');
 
     const composition = getBattleDeckComposition();
@@ -460,6 +527,7 @@ export default function useCombat() {
       next[index] = replacementCard;
       return next;
     });
+    addLog(`T${turn}: discard board tile (-${TUNING.draft.discardManaCost} MP)`);
 
     if (enemy.ability === 'adaptive') {
       setEnemyShield((s) => s + 25);
@@ -496,93 +564,287 @@ export default function useCombat() {
   };
 
   // ----------------------------------------------------------
+  // Victory helper
+  // ----------------------------------------------------------
+
+  const triggerVictory = (currentMana, currentHp) => {
+    setTimeout(() => {
+      const manaAfterFoe = Math.min(TUNING.player.maxMana, currentMana + TUNING.player.manaRegenPerFoe);
+      const hpAfterFoe = Math.min(TUNING.player.maxHp, currentHp + TUNING.player.hpRegenPerFoe);
+      setPlayerMana(manaAfterFoe);
+      setPlayerHp(hpAfterFoe);
+      setVictoryReward({
+        baseManaGain: TUNING.player.manaRegenPerFoe,
+        baseHpGain: TUNING.player.hpRegenPerFoe,
+        manaAfter: manaAfterFoe,
+        hpAfter: hpAfterFoe,
+        choicesAllowed: TUNING.rewardChoicesPerKill,
+        perks: buildRewardOptions(enemyIdx, playerAbilityComboIds, playerPassives),
+      });
+      setSelectedRewardKeys([]);
+      setCombatBanner(null);
+      playSound('victory');
+      addLog(`❆ ${enemy.name} defeated`);
+      addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
+      addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
+      setPhase('victory');
+    }, 1300);
+  };
+
+  // ----------------------------------------------------------
   // Resolution — apply damage, shields, check win/loss
   // ----------------------------------------------------------
-  const resolveTurn = (finalSequence) => {
+  const resolveTurn = (resolvedInput) => {
     setPhase('resolving');
-    const { damage, block, segments } = computeResolution(finalSequence, {
-      damageMultiplier: 1 + playerDamageBonusPct,
-      defenceMultiplier: 1 + playerDefenceBonusPct,
-    });
+    const resolution = Array.isArray(resolvedInput)
+      ? {
+          kind: 'basic',
+          tiles: resolvedInput,
+          sequence: resolvedInput.join(''),
+          length: resolvedInput.length,
+          heal: 0,
+          manaCost: 0,
+          statusEffect: null,
+          abilityBonus: 0,
+          ...computeResolution(resolvedInput, {
+            damageMultiplier: 1 + playerDamageBonusPct,
+            defenceMultiplier: 1 + playerDefenceBonusPct,
+          }),
+        }
+      : resolvedInput;
 
-    // Readable log string for the committed sequence
-    const seqStr = segments
-      .map((s) => {
-        if (s.type === 'E') return '·';
-        if (s.type === 'A') return `${'A'.repeat(s.count)}(${s.damage})`;
-        if (s.type === 'D') return `${'D'.repeat(s.count)}(${s.block})`;
-        return '';
-      })
-      .join(' ');
+    const {
+      damage: baseDamage,
+      block,
+      mana,
+      heal = 0,
+      manaCost = 0,
+      segments,
+      ability,
+      hits,
+      statusEffect,
+      abilityBonus = 0,
+    } = resolution;
+
+    const isAbilityCombo = resolution.kind === 'ability';
+    const finalTiles = resolution.tiles || [];
+
+    // Apply Last Stand (+20% dmg when HP < 40%)
+    const lastStandActive = playerPassives.includes('last_stand') && playerHp < TUNING.player.maxHp * 0.4;
+    const damage = lastStandActive ? Math.round(baseDamage * 1.2) : baseDamage;
+
+    const applyDamageToEnemy = (rawHits, startingShield, startingHp) => {
+      let nextShield = startingShield;
+      let nextHp = startingHp;
+      let absorbedTotal = 0;
+      let dealtTotal = 0;
+      let armorReductionTotal = 0;
+      rawHits.forEach((rawHit) => {
+        if (rawHit <= 0) return;
+        const armorReduction = enemy.ability === 'armored' ? Math.min(10, rawHit) : 0;
+        const effectiveHit = Math.max(0, rawHit - armorReduction);
+        const absorbed = Math.min(nextShield, effectiveHit);
+        const dealt = effectiveHit - absorbed;
+        nextShield -= absorbed;
+        nextHp = Math.max(0, nextHp - dealt);
+        armorReductionTotal += armorReduction;
+        absorbedTotal += absorbed;
+        dealtTotal += dealt;
+      });
+      return { shield: nextShield, hp: nextHp, absorbed: absorbedTotal, dealt: dealtTotal, armorReduction: armorReductionTotal };
+    };
+
+    const seqStr = ability
+      ? `${ability.pattern} ${ability.name}`
+      : (segments || []).map((s) => {
+          if (s.type === 'E') return '·';
+          if (s.type === 'A') return `${'A'.repeat(s.count)}(${s.damage})`;
+          if (s.type === 'D') return `${'D'.repeat(s.count)}(${s.block})`;
+          if (s.type === 'M') return `${'M'.repeat(s.count)}(+${s.mana}mp)`;
+          if (s.type === 'ABILITY') return `${s.pattern} ${s.name}`;
+          return '';
+        }).join(' ');
 
     setTimeout(() => {
-      // --- Shield gain (capped at max) ---
+      const shieldCap = TUNING.player.maxShield;
+      const manaAfterResolution = Math.min(TUNING.player.maxMana, playerMana + mana);
+      const playerHpAfterAbility = Math.min(TUNING.player.maxHp, playerHp + heal);
       const shieldBefore = playerShield;
       const shieldRaw = shieldBefore + block;
-      const shieldAfterGain = Math.min(TUNING.player.maxShield, shieldRaw);
-      const shieldWasted = shieldRaw - shieldAfterGain;
+      let shieldAfterGain = Math.min(shieldCap, shieldRaw);
+      let shieldWasted = shieldRaw - shieldAfterGain;
+
+      // Overflow passive: excess shield -> HP at 50%
+      let overflowHeal = 0;
+      if (playerPassives.includes('overflow') && shieldWasted > 0) {
+        overflowHeal = Math.floor(shieldWasted * 0.5);
+      }
+      const playerHpAfterOverflow = Math.min(TUNING.player.maxHp, playerHpAfterAbility + overflowHeal);
+
+      // --- Process ability status effects ---
+      let nextStatusEffects = { ...statusEffectsRef.current };
+      let immediateStatusDmg = 0; // Resonance: 10 dmg when status applied
+      let echoDmg = 0; // Echo: 10 dmg after any ability triggers
+      let catalystMana = 0; // Catalyst: +10 MP refund
+
+      if (isAbilityCombo) {
+        // Catalyst: refund 10 MP
+        if (playerPassives.includes('catalyst')) catalystMana = 10;
+
+        // Echo: deal 10 bonus damage
+        if (playerPassives.includes('echo')) echoDmg = 10;
+
+        if (statusEffect?.type === 'burn') {
+          const hasKindling = playerPassives.includes('kindling');
+          const hasAfterburn = playerPassives.includes('afterburn');
+          const hasAmplifier = playerPassives.includes('amplifier');
+          const newTickDamage = hasKindling ? 25 : 15;
+          const newBaseTurns = hasAfterburn ? 3 : 2;
+          const newTurns = hasAmplifier ? newBaseTurns + 1 : newBaseTurns;
+
+          const existingBurn = nextStatusEffects.burn;
+          if (existingBurn) {
+            // Stack: add turns (capped at 6), take highest tick damage
+            nextStatusEffects = {
+              ...nextStatusEffects,
+              burn: {
+                turnsLeft: Math.min(6, existingBurn.turnsLeft + newTurns),
+                tickDamage: Math.max(existingBurn.tickDamage, newTickDamage),
+              },
+            };
+          } else {
+            nextStatusEffects = { ...nextStatusEffects, burn: { turnsLeft: newTurns, tickDamage: newTickDamage } };
+          }
+
+          // Resonance: 10 dmg on apply
+          if (playerPassives.includes('resonance')) immediateStatusDmg += 10;
+
+          // Opportunist: if enemy is also Vulnerable, trigger immediate Burn tick
+          const isVulnerable = statusEffectsRef.current.vulnerable && statusEffectsRef.current.vulnerable.turnsLeft > 0;
+          if (playerPassives.includes('opportunist') && isVulnerable) {
+            immediateStatusDmg += tickDamage;
+          }
+        } else if (statusEffect?.type === 'endure') {
+          nextStatusEffects = { ...nextStatusEffects, endure: true };
+          // Resonance does not apply to Endure (it's defensive)
+        } else if (statusEffect?.type === 'vulnerable') {
+          const hasCruelty = playerPassives.includes('cruelty');
+          const hasAmplifier = playerPassives.includes('amplifier');
+          const bonusPct = hasCruelty ? 0.50 : 0.30;
+          const turnsLeft = hasAmplifier ? 2 : 1;
+          nextStatusEffects = { ...nextStatusEffects, vulnerable: { turnsLeft, bonusPct } };
+
+          // Resonance: 10 dmg on apply
+          if (playerPassives.includes('resonance')) immediateStatusDmg += 10;
+
+          // Setup: grant +1 pick next turn
+          if (playerPassives.includes('setup')) {
+            setSetupBonusPicks(1);
+          }
+        }
+      }
+
+      // Apply status effects and update ref
+      updateStatusEffects(nextStatusEffects);
+
+      const manaFinal = Math.min(TUNING.player.maxMana, manaAfterResolution + catalystMana);
 
       const logParts = [`T${turn}: ${seqStr} → ${damage} dmg`];
       if (block > 0) {
         if (shieldWasted > 0) {
-          logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted, cap ${TUNING.player.maxShield})`);
+          logParts.push(`+${block - shieldWasted} shield (${shieldWasted} wasted${overflowHeal > 0 ? ` → +${overflowHeal} HP` : ''})`);
         } else {
           logParts.push(`+${block} shield`);
         }
       }
+      if (mana > 0) logParts.push(`+${mana} mana`);
+      if (catalystMana > 0) logParts.push(`+${catalystMana} mana (Catalyst)`);
+      if (heal > 0) logParts.push(`+${heal} HP`);
+      if (overflowHeal > 0) logParts.push(`+${overflowHeal} HP (Overflow)`);
+      if (isAbilityCombo && statusEffect) logParts.push(statusEffect.type === 'burn' ? 'Burn applied' : statusEffect.type === 'endure' ? 'Endure active' : 'Vulnerable applied');
+      if (lastStandActive && damage > baseDamage) logParts.push(`Last Stand +${damage - baseDamage} dmg`);
+      if (ability?.detail && !statusEffect) logParts.push(ability.detail);
+
+      setPlayerMana(manaFinal);
+      setPlayerHp(playerHpAfterOverflow);
       addLog(logParts.join(' / '));
+
       showCombatBanner({
         eyebrow: 'Player Action',
-        title: formatPlayerAction(damage, block),
-        detail: seqStr || 'No combo resolved',
+        title: ability ? ability.name : seqStr || 'No action',
+        detail: seqStr,
         tone: 'player',
       });
-      if (finalSequence.length >= 2) playSound('combo');
+      if (finalTiles.length >= 2) playSound('combo');
       if (damage > 0) playSound('attack');
       if (block > 0) playSound('defence');
 
-      // --- Apply player damage to enemy (enemy shield absorbs first) ---
-      const armoredReduction = enemy.ability === 'armored' && damage > 0 ? 10 : 0;
-      const effectiveDamage = Math.max(0, damage - armoredReduction);
-      if (armoredReduction > 0) {
-        addLog(`  ${enemy.name} armor reduces hit by ${armoredReduction}`);
+      // --- Apply player damage + echo + immediate status dmg to enemy ---
+      const totalDamageToEnemy = damage + echoDmg + immediateStatusDmg;
+
+      // Note: Vulnerable applies to the NEXT attack after Press, not to Press itself.
+      // So we check the pre-update statusEffectsRef for the previous vulnerable state.
+      const wasVulnerable = statusEffectsRef.current.vulnerable && statusEffectsRef.current.vulnerable.turnsLeft > 0;
+      const vulnerableBonusPct = wasVulnerable ? statusEffectsRef.current.vulnerable.bonusPct : 0;
+      const totalDmgWithVulnerable = wasVulnerable
+        ? Math.round(totalDamageToEnemy * (1 + vulnerableBonusPct))
+        : totalDamageToEnemy;
+
+      // Consume Vulnerable if it was active
+      if (wasVulnerable) {
+        const newVulnLeft = statusEffectsRef.current.vulnerable.turnsLeft - 1;
+        const newVulnState = newVulnLeft > 0 ? { ...statusEffectsRef.current.vulnerable, turnsLeft: newVulnLeft } : null;
+        updateStatusEffects((prev) => ({ ...prev, vulnerable: newVulnState }));
+        if (vulnerableBonusPct > 0) addLog(`  Vulnerable: +${Math.round(vulnerableBonusPct * 100)}% dmg bonus`);
       }
-      const enemyAbsorbed = Math.min(enemyShield, effectiveDamage);
-      const enemyShieldAfterHit = enemyShield - enemyAbsorbed;
-      const dealtToHp = effectiveDamage - enemyAbsorbed;
-      const newEnemyHp = Math.max(0, enemyHp - dealtToHp);
-      if (enemyAbsorbed > 0) {
-        addLog(`  ${enemy.name} shield absorbs ${enemyAbsorbed}`);
+
+      // Handle Drain ability: steal enemy shield
+      let drainStealAmount = 0;
+      if (isAbilityCombo && ability?.effect === 'drain') {
+        const maxSteal = abilityBonus; // already calculated in computeAbilityResolution
+        drainStealAmount = Math.min(enemyShield, maxSteal);
+        const hasLeech = playerPassives.includes('leech');
+        if (hasLeech) {
+          const leechHeal = Math.min(15, TUNING.player.maxHp - playerHpAfterOverflow);
+          setPlayerHp((h) => Math.min(TUNING.player.maxHp, h + 15));
+          if (leechHeal > 0) addLog(`  Leech: +${leechHeal} HP`);
+        }
+        addLog(`  Drain: stole ${drainStealAmount} shield from ${enemy.name}`);
       }
-      setPlayerShield(shieldAfterGain);
+
+      const enemyShieldBeforeSteal = Math.max(0, enemyShield - drainStealAmount);
+      const playerShieldAfterDrain = Math.min(shieldCap, shieldAfterGain + drainStealAmount);
+
+      const enemyDamage = applyDamageToEnemy(
+        hits || (totalDmgWithVulnerable > 0 ? [totalDmgWithVulnerable] : []),
+        enemyShieldBeforeSteal,
+        enemyHp,
+      );
+      const enemyShieldAfterHit = enemyDamage.shield;
+      const newEnemyHp = enemyDamage.hp;
+
+      if (enemyDamage.armorReduction > 0) addLog(`  ${enemy.name} armor reduces hit by ${enemyDamage.armorReduction}`);
+      if (enemyDamage.absorbed > 0) addLog(`  ${enemy.name} shield absorbs ${enemyDamage.absorbed}`);
+      if (echoDmg > 0) addLog(`  Echo: +${echoDmg} dmg`);
+
+      setPlayerShield(playerShieldAfterDrain);
       setEnemyShield(enemyShieldAfterHit);
       setEnemyHp(newEnemyHp);
 
+      // Track stockpile (non-ability turns stack +8 dmg, max 40)
+      if (!isAbilityCombo && playerPassives.includes('stockpile')) {
+        setStockpileStacks((s) => Math.min(40, s + 8));
+      }
+      // Track flow state (consecutive 5-card combos)
+      const wasLastFiveCard = lastWasFiveCardCombo;
+      setLastWasFiveCardCombo(isAbilityCombo);
+
       if (newEnemyHp <= 0) {
-        setTimeout(() => {
-          const manaAfterFoe = Math.min(TUNING.player.maxMana, playerMana + TUNING.player.manaRegenPerFoe);
-          const hpAfterFoe = Math.min(TUNING.player.maxHp, playerHp + TUNING.player.hpRegenPerFoe);
-          setPlayerMana(manaAfterFoe);
-          setPlayerHp(hpAfterFoe);
-          setVictoryReward({
-            baseManaGain: TUNING.player.manaRegenPerFoe,
-            baseHpGain: TUNING.player.hpRegenPerFoe,
-            manaAfter: manaAfterFoe,
-            hpAfter: hpAfterFoe,
-            perks: buildPerkOptions(enemyIdx),
-          });
-          setSelectedPerkKey(null);
-          setCombatBanner(null);
-          playSound('victory');
-          addLog(`✦ ${enemy.name} defeated`);
-          addLog(`+${TUNING.player.manaRegenPerFoe} MP after foe (${manaAfterFoe}/${TUNING.player.maxMana})`);
-          addLog(`+${TUNING.player.hpRegenPerFoe} HP after foe (${hpAfterFoe}/${TUNING.player.maxHp})`);
-          setPhase('victory');
-        }, 1300);
+        triggerVictory(manaFinal, playerHpAfterOverflow);
         return;
       }
 
-      // --- Enemy executes current intent (attack or defend) ---
+      // --- Enemy executes current intent ---
       const currentIntent = enemyIntentQueue[0] || { type: 'attack', amount: incomingDamage };
 
       setTimeout(() => {
@@ -597,12 +859,13 @@ export default function useCombat() {
 
       setTimeout(() => {
         let shieldAfterEnemyAction = enemyShieldAfterHit;
-        let newPlayerHp = playerHp;
+        let currentEnemyHp = newEnemyHp;
+        let newPlayerHp = playerHpAfterOverflow;
 
         if (currentIntent.type === 'defend') {
           shieldAfterEnemyAction += currentIntent.amount;
           setEnemyShield(shieldAfterEnemyAction);
-          setPlayerShield(shieldAfterGain);
+          setPlayerShield(playerShieldAfterDrain);
           addLog(`  ${enemy.name} fortifies +${currentIntent.amount} shield`);
           showCombatBanner({
             eyebrow: enemy.name,
@@ -611,30 +874,84 @@ export default function useCombat() {
             tone: 'enemy',
           });
           playSound('enemyDefend');
+          setLastDamageTaken(0);
         } else {
-          const rawDmg = currentIntent.amount;
-          const absorbed = Math.min(shieldAfterGain, rawDmg);
-          const shieldAfterHit = shieldAfterGain - absorbed;
-          const taken = rawDmg - absorbed;
-          newPlayerHp = Math.max(0, playerHp - taken);
+          let rawDmg = currentIntent.amount;
+          // Thick Skin: -5 flat
+          const thickSkinReduction = playerPassives.includes('thick_skin') ? 5 : 0;
+          const modifiedDmg = Math.max(0, rawDmg - thickSkinReduction);
+          const absorbed = Math.min(playerShieldAfterDrain, modifiedDmg);
 
-          if (absorbed > 0) {
-            addLog(`  ${enemy.name} hits ${rawDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+          // Endure: absorb the hit completely
+          const currentEndure = nextStatusEffects.endure;
+          if (currentEndure) {
+            updateStatusEffects((prev) => ({ ...prev, endure: false }));
+            addLog(`  Endure absorbs ${enemy.name}'s ${rawDmg} hit`);
+            setLastDamageTaken(0);
+
+            // Retaliate: deal 25 dmg back
+            if (playerPassives.includes('retaliate')) {
+              const retaliateAbsorbed = Math.min(shieldAfterEnemyAction, 25);
+              const retaliateDmg = 25 - retaliateAbsorbed;
+              shieldAfterEnemyAction -= retaliateAbsorbed;
+              currentEnemyHp = Math.max(0, currentEnemyHp - retaliateDmg);
+              setEnemyShield(shieldAfterEnemyAction);
+              setEnemyHp(currentEnemyHp);
+              addLog(`  Retaliate: 25 dmg to ${enemy.name} (${retaliateDmg} to HP)`);
+            }
+            // Bulwark: gain 20 HP
+            if (playerPassives.includes('bulwark')) {
+              const bulwarkHeal = Math.min(20, TUNING.player.maxHp - newPlayerHp);
+              newPlayerHp += bulwarkHeal;
+              if (bulwarkHeal > 0) addLog(`  Bulwark: +${bulwarkHeal} HP`);
+            }
+            showCombatBanner({
+              eyebrow: enemy.name,
+              title: 'Attack Absorbed',
+              detail: 'Endure blocked the hit',
+              tone: 'player',
+            });
+            playSound('defence');
           } else {
-            addLog(`  ${enemy.name} hits ${rawDmg} — no shield, you take ${taken}`);
+            const shieldAfterHit = playerShieldAfterDrain - absorbed;
+            const taken = modifiedDmg - absorbed;
+            newPlayerHp = Math.max(0, newPlayerHp - taken);
+
+            if (thickSkinReduction > 0 && modifiedDmg !== rawDmg) addLog(`  Thick Skin reduces ${rawDmg} → ${modifiedDmg}`);
+            if (absorbed > 0) {
+              addLog(`  ${enemy.name} hits ${modifiedDmg} — shield absorbs ${absorbed}, you take ${taken}`);
+            } else {
+              addLog(`  ${enemy.name} hits ${modifiedDmg} — no shield, you take ${taken}`);
+            }
+            setPlayerShield(shieldAfterHit);
+            setLastDamageTaken(taken);
+
+            // Tenacity: first time HP drops below 40%, gain 30 shield
+            if (playerPassives.includes('tenacity') && !tenacityTriggeredThisBattle) {
+              const hpPct = newPlayerHp / TUNING.player.maxHp;
+              if (hpPct < 0.4) {
+                setPlayerShield((s) => Math.min(TUNING.player.maxShield, s + 30));
+                setTenacityTriggeredThisBattle(true);
+                addLog(`  Tenacity triggered: +30 shield`);
+              }
+            }
+
+            showCombatBanner({
+              eyebrow: enemy.name,
+              title: `Attack ${modifiedDmg} damage`,
+              detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
+              tone: 'enemy',
+            });
+            playSound('enemyAttack');
           }
-          setPlayerShield(shieldAfterHit);
-          showCombatBanner({
-            eyebrow: enemy.name,
-            title: `Attack ${rawDmg} damage`,
-            detail: absorbed > 0 ? `Shield absorbed ${absorbed}, you took ${taken}` : `You took ${taken} damage`,
-            tone: 'enemy',
-          });
-          playSound('enemyAttack');
         }
 
         setPlayerHp(newPlayerHp);
 
+        if (currentEnemyHp <= 0) {
+          triggerVictory(manaFinal, newPlayerHp);
+          return;
+        }
         if (newPlayerHp <= 0) {
           setTimeout(() => {
             setCombatBanner(null);
@@ -645,13 +962,48 @@ export default function useCombat() {
           return;
         }
 
-        // Advance to the next turn after the outcome banner has had time to land.
+        // Advance turn — process Burn tick and Second Wind before startTurn
         setTimeout(() => {
           const nextTurn = turn + 1;
           const nextQueue = buildIntentQueue(nextTurn, enemyIntentQueue.slice(1));
           setEnemyIntentQueue(nextQueue);
           setTurn(nextTurn);
-          startTurn(nextTurn, nextQueue);
+
+          // Process burn tick at start of next turn
+          let burnedEnemyHp = currentEnemyHp;
+          let burnedEnemyShield = shieldAfterEnemyAction;
+          const latestStatusEffects = statusEffectsRef.current;
+          if (latestStatusEffects.burn && latestStatusEffects.burn.turnsLeft > 0) {
+            const { tickDamage, turnsLeft } = latestStatusEffects.burn;
+            const burnAbsorbed = Math.min(burnedEnemyShield, tickDamage);
+            const burnToHp = tickDamage - burnAbsorbed;
+            burnedEnemyShield -= burnAbsorbed;
+            burnedEnemyHp = Math.max(0, burnedEnemyHp - burnToHp);
+            const newBurn = turnsLeft > 1 ? { tickDamage, turnsLeft: turnsLeft - 1 } : null;
+            updateStatusEffects((prev) => ({ ...prev, burn: newBurn }));
+            setEnemyShield(burnedEnemyShield);
+            setEnemyHp(burnedEnemyHp);
+            addLog(`Burn: ${tickDamage} dmg to ${enemy.name}${burnAbsorbed > 0 ? ` (${burnAbsorbed} absorbed)` : ''}`);
+
+            if (burnedEnemyHp <= 0) {
+              triggerVictory(manaFinal, newPlayerHp);
+              return;
+            }
+          }
+
+          // Second Wind: heal 10 HP every 3rd turn
+          if (playerPassives.includes('second_wind') && nextTurn % 3 === 0) {
+            setPlayerHp((h) => Math.min(TUNING.player.maxHp, h + 10));
+            addLog(`  Second Wind: +10 HP`);
+          }
+
+          // Flow State: two consecutive 5-card combos -> +2 picks this turn
+          const flowBonus = (playerPassives.includes('flow_state') && wasLastFiveCard && isAbilityCombo) ? 2 : 0;
+
+          // Setup bonus pick (from Press)
+          const setupBonus = setupBonusPicks;
+
+          startTurn(nextTurn, nextQueue, flowBonus + setupBonus);
         }, 1400);
       }, 2200);
     }, 250);
@@ -662,31 +1014,39 @@ export default function useCombat() {
   // ----------------------------------------------------------
 
   const applyPerk = (key) => {
-    if (phase !== 'victory' || selectedPerkKey || !victoryReward) return;
+    if (phase !== 'victory' || !victoryReward) return;
+    if (selectedRewardKeys.includes(key)) return;
+    if (selectedRewardKeys.length >= (victoryReward.choicesAllowed || TUNING.rewardChoicesPerKill)) return;
     const perk = victoryReward.perks.find((option) => option.key === key);
     if (!perk) return;
 
-    if (perk.key === 'damage') {
-      setPlayerDamageBonusPct((value) => value + perk.amount);
-      addLog(`Perk chosen: ${perk.label}`);
+    if (perk.kind === 'ability') {
+      setPlayerAbilityComboIds((ids) => (ids.includes(perk.abilityId) ? ids : [...ids, perk.abilityId]));
+      addLog(`Ability unlocked: ${perk.label} (${perk.sublabel})`);
+    } else if (perk.kind === 'passive') {
+      setPlayerPassives((ids) => (ids.includes(perk.passiveId) ? ids : [...ids, perk.passiveId]));
+      addLog(`Passive unlocked: ${perk.label}`);
+    } else if (perk.key === 'damage') {
+      setPlayerDamageBonusPct((v) => v + perk.amount);
+      addLog(`Stat: ${perk.label}`);
     } else if (perk.key === 'defence') {
-      setPlayerDefenceBonusPct((value) => value + perk.amount);
-      addLog(`Perk chosen: ${perk.label}`);
+      setPlayerDefenceBonusPct((v) => v + perk.amount);
+      addLog(`Stat: ${perk.label}`);
     } else if (perk.key === 'mana') {
-      setPlayerMana((value) => Math.min(TUNING.player.maxMana, value + perk.amount));
-      addLog(`Perk chosen: ${perk.label}`);
+      setPlayerMana((v) => Math.min(TUNING.player.maxMana, v + perk.amount));
+      addLog(`Stat: ${perk.label}`);
     } else if (perk.key === 'hp') {
-      setPlayerHp((value) => Math.min(TUNING.player.maxHp, value + perk.amount));
-      addLog(`Perk chosen: ${perk.label}`);
+      setPlayerHp((v) => Math.min(TUNING.player.maxHp, v + perk.amount));
+      addLog(`Stat: ${perk.label}`);
     }
 
     playSound('perk');
-    setSelectedPerkKey(key);
+    setSelectedRewardKeys((keys) => [...keys, key]);
   };
 
   /** Advance to the next enemy in the gauntlet */
   const nextEnemy = () => {
-    if (!selectedPerkKey) return;
+    if (selectedRewardKeys.length < TUNING.rewardChoicesPerKill) return;
     if (enemyIdx < TUNING.enemies.length - 1) {
       playSound('submit');
       const next = enemyIdx + 1;
@@ -695,55 +1055,77 @@ export default function useCombat() {
       setEnemyShield(0);
       // Carry current HP/MP/shield to the next fight; no recovery between foes.
       setVictoryReward(null);
-      setSelectedPerkKey(null);
+      setSelectedRewardKeys([]);
       setTurn(1);
       setLog([]);
     }
   };
 
-  /** Restart the fight against the current enemy */
+  /** Restart the entire run from the beginning with a new ability selection */
   const restart = () => {
     playSound('submit');
-    setEnemyHp(TUNING.enemies[enemyIdx].hp);
+    isFirstBattleRef.current = true;
+    setStartingAbilityOptions([...ABILITY_COMBOS].sort(() => Math.random() - 0.5).slice(0, 4));
+    setEnemyIdx(0);
+    setEnemyHp(TUNING.enemies[0].hp);
+    setEnemyShield(0);
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
     setPlayerShield(0);
     setPlayerDamageBonusPct(0);
     setPlayerDefenceBonusPct(0);
-    setEnemyShield(0);
+    setPlayerAbilityComboIds([]);
+    setPlayerPassives([]);
+    updateStatusEffects({ burn: null, vulnerable: null, endure: false });
+    setLastDamageTaken(0);
+    setStockpileStacks(0);
+    setLastWasFiveCardCombo(false);
+    setTenacityTriggeredThisBattle(false);
+    setSetupBonusPicks(0);
     setTurn(1);
     setLog([]);
     setRerollsUsedEnemy(0);
+    setDiscardsUsedEnemy(0);
     setSelectedCommittedIndex(null);
-    setVictoryReward(null);
-    setSelectedPerkKey(null);
-    // Rebuild the deck and pool for this fight.
-    const [newDeck, initialPool] = buildBattleDeck();
-    setDeck(newDeck);
-    setCurrentRow(initialPool);
-    setBoardCardAnimationKeys(Array.from({ length: TUNING.draft.rowSize }, () => 0));
+    setCommitted([]);
     setCommittedCardAnimationKeys(Array.from({ length: handSlotCount }, () => 0));
-    setDeckShuffleCount(1);
-    startTurn(1);
+    setVictoryReward(null);
+    setSelectedRewardKeys([]);
+    // Increment reset counter to force the enemy effect to re-fire even if enemyIdx stays 0
+    setGameResetCount((c) => c + 1);
+  };
+
+  /** Player picks one of the starting ability options to begin the run */
+  const selectStartingAbility = (abilityId) => {
+    isFirstBattleRef.current = false;
+    setPlayerAbilityComboIds([abilityId]);
+    startTurn(1, enemyIntentQueue);
   };
 
   // ----------------------------------------------------------
   // Derived / computed values the UI needs
   // ----------------------------------------------------------
-  const resolutionModifiers = {
-    damageMultiplier: 1 + playerDamageBonusPct,
-    defenceMultiplier: 1 + playerDefenceBonusPct,
-  };
+  const resolutionModifiers = buildResolutionContext();
   const bestCombo = findBestAcceptedSequence(committed, resolutionModifiers);
-  const preview = computeResolution(bestCombo ? bestCombo.tiles : [], resolutionModifiers);
-  const discardCost = getDiscardCost();
-  const sequenceValid = isValidSequence(committed);
+  const preview = bestCombo || {
+    ...computeResolution([], resolutionModifiers),
+    kind: 'none',
+    heal: 0,
+    manaCost: 0,
+    statusEffect: null,
+    effects: [],
+  };
+  const sequenceValid = isValidSequence(committed, resolutionModifiers);
   const sequenceFull = picksUsed >= pickLimit;
   const rerollsLeftEnemy = Math.max(0, TUNING.draft.maxRerollsPerEnemy - rerollsUsedEnemy);
+  const maxDiscards = enemy.ability === 'double_discard' ? 1 : TUNING.draft.maxDiscardsPerTurn;
+  const discardsLeftEnemy = Math.max(0, maxDiscards - discardsUsedEnemy);
+  const unlockedAbilityCombos = ABILITY_COMBOS.filter((c) => playerAbilityComboIds.includes(c.id));
   const deckCounts = deck.reduce((acc, card) => {
     acc[card] = (acc[card] || 0) + 1;
     return acc;
-  }, { A: 0, D: 0, E: 0 });
+  }, { A: 0, D: 0, M: 0, E: 0 });
+  const rerollCost = playerPassives.includes('sharpness') ? 15 : TUNING.draft.rerollManaCost;
 
   // ----------------------------------------------------------
   // Public API
@@ -770,24 +1152,32 @@ export default function useCombat() {
       boardCardAnimationKeys,
       committedCardAnimationKeys,
       rerollsUsedEnemy,
+      discardsUsedEnemy,
       deckSize: deck.length,
       deckCounts,
       deckShuffleCount,
       deckIsShuffled: true,
       rerollsLeftEnemy,
+      discardsLeftEnemy,
       log,
       phase,
       incomingDamage,
       enemyTelegraph,
       enemyIntentQueue,
       preview,
-      discardCost,
       sequenceValid,
       sequenceFull,
       combatBanner,
       victoryReward,
-      selectedPerkKey,
+      selectedRewardKeys,
       logEndRef,
+      playerAbilityComboIds,
+      playerPassives,
+      statusEffects,
+      unlockedAbilityCombos,
+      totalAbilityComboCount: ABILITY_COMBOS.length,
+      rerollCost,
+      startingAbilityOptions,
     },
     actions: {
       pickTile,
@@ -800,6 +1190,7 @@ export default function useCombat() {
       submitSequence,
       nextEnemy,
       restart,
+      selectStartingAbility,
     },
   };
 }

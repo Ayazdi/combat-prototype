@@ -70,6 +70,12 @@ export const globalCss = `
     animation: combatBannerIn 0.28s ease-out, combatBannerPulse 1.15s ease-in-out 0.28s infinite alternate;
   }
 
+  /* Ability tooltip hover reveal */
+  .ability-wrap:hover .ability-tooltip {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   /* Victory / defeat overlay buttons */
   .overlay-btn {
     cursor: pointer;
@@ -222,6 +228,51 @@ export const styles = {
     letterSpacing: '0.2em',
     color: '#b8a88a',
     fontWeight: 600,
+  },
+  statsLine: {
+    fontSize: 10,
+    color: '#6a6258',
+    letterSpacing: '0.12em',
+    marginTop: 2,
+  },
+  abilityWrap: {
+    position: 'relative',
+    display: 'inline-block',
+    marginLeft: 6,
+  },
+  abilityBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 11,
+    width: 16,
+    height: 16,
+    borderRadius: '50%',
+    border: '1px solid #4a4438',
+    color: '#8a8070',
+    cursor: 'help',
+    lineHeight: 1,
+    userSelect: 'none',
+  },
+  abilityTooltip: {
+    position: 'absolute',
+    bottom: '100%',
+    right: 0,
+    marginBottom: 6,
+    width: 200,
+    padding: '7px 10px',
+    background: '#1a1612',
+    border: '1px solid #3a342a',
+    borderRadius: 2,
+    fontSize: 10,
+    color: '#c9b28a',
+    letterSpacing: '0.06em',
+    lineHeight: 1.5,
+    opacity: 0,
+    pointerEvents: 'none',
+    transition: 'opacity 0.15s ease',
+    zIndex: 10,
+    whiteSpace: 'normal',
   },
 
   // --- Stat bars (HP / MP / Shield) ---
@@ -521,6 +572,82 @@ export const styles = {
     letterSpacing: '0.1em',
   },
 
+  // --- Ability combo reference ---
+  comboCodex: {
+    background: 'linear-gradient(180deg, rgba(18, 16, 13, 0.78) 0%, rgba(10, 8, 6, 0.72) 100%)',
+    border: '1px solid #2a2418',
+    padding: '14px 16px',
+    marginBottom: 20,
+    borderRadius: 2,
+  },
+  comboCodexHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+  },
+  comboCodexTitle: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 12,
+    letterSpacing: '0.24em',
+    color: '#d4a24c',
+    fontWeight: 600,
+  },
+  comboCodexHint: {
+    fontSize: 10,
+    color: '#7a7265',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+  },
+  comboCodexGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: 8,
+  },
+  comboCodexItem: {
+    display: 'grid',
+    gridTemplateColumns: '92px 1fr',
+    gap: 10,
+    alignItems: 'center',
+    minHeight: 54,
+    padding: '8px 10px',
+    background: '#11100d',
+    border: '1px solid #2a2418',
+    borderRadius: 2,
+  },
+  comboPattern: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: 3,
+  },
+  comboPatternTile: {
+    height: 20,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#1a1612',
+    border: '1px solid #3a342a',
+    color: '#e8d4a8',
+    fontSize: 11,
+    borderRadius: 2,
+  },
+  comboText: {
+    minWidth: 0,
+  },
+  comboName: {
+    fontSize: 11,
+    color: '#e8d4a8',
+    letterSpacing: '0.08em',
+    fontWeight: 700,
+    marginBottom: 3,
+  },
+  comboDetail: {
+    fontSize: 10,
+    color: '#8a8070',
+    lineHeight: 1.35,
+  },
+
   // --- Battle log ---
   logSection: {
     background: '#0a0806',
@@ -672,6 +799,54 @@ export const styles = {
   perkBtnDisabled: {
     opacity: 0.42,
   },
+  abilitySelectBtn: {
+    minHeight: 120,
+    padding: '14px 12px',
+    background: '#14110e',
+    border: '1px solid #3a342a',
+    color: '#b8a88a',
+    fontFamily: '"JetBrains Mono", monospace',
+    borderRadius: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    textAlign: 'center',
+  },
+
+  // --- Status effect badges ---
+  statusBadges: {
+    display: 'flex',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  statusBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '3px 8px',
+    borderRadius: 2,
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+  },
+  statusBadgeBurn: {
+    background: 'rgba(180, 60, 20, 0.25)',
+    border: '1px solid rgba(200, 80, 30, 0.6)',
+    color: '#e8a060',
+  },
+  statusBadgeVulnerable: {
+    background: 'rgba(160, 120, 20, 0.25)',
+    border: '1px solid rgba(200, 160, 30, 0.6)',
+    color: '#e8d060',
+  },
+  statusBadgeEndure: {
+    background: 'rgba(40, 100, 180, 0.25)',
+    border: '1px solid rgba(60, 130, 220, 0.6)',
+    color: '#80b8e8',
+  },
   perkLabel: {
     fontSize: 12,
     letterSpacing: '0.08em',
@@ -703,5 +878,56 @@ export const styles = {
   overlayBtnDisabled: {
     opacity: 0.4,
     filter: 'grayscale(0.35)',
+  },
+
+  // --- Spells panel ---
+  spellsPanel: {
+    background: 'linear-gradient(180deg, rgba(26, 22, 18, 0.6) 0%, rgba(13, 10, 8, 0.6) 100%)',
+    border: '1px solid #2a2418',
+    padding: '14px 20px',
+    marginBottom: 20,
+    borderRadius: 2,
+  },
+  spellsPanelLabel: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 12,
+    letterSpacing: '0.25em',
+    color: '#d4a24c',
+    fontWeight: 600,
+    marginBottom: 10,
+  },
+  spellsPanelRow: {
+    display: 'flex',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  spellBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    padding: '10px 18px',
+    background: '#14110e',
+    border: '1px solid #3a342a',
+    color: '#b8a88a',
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 11,
+    letterSpacing: '0.15em',
+    fontWeight: 500,
+    borderRadius: 2,
+    minWidth: 72,
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.4)',
+  },
+  spellBtnCost: {
+    fontSize: 10,
+    color: '#4a8bc2',
+    letterSpacing: '0.1em',
+  },
+  spellBtnDisabled: {
+    opacity: 0.35,
+    cursor: 'not-allowed',
   },
 };
