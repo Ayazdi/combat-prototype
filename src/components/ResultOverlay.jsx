@@ -1,96 +1,46 @@
 import { TUNING } from '../constants';
 import { styles } from '../styles';
 
-// ============================================================
-// ResultOverlay — full-screen overlay shown on victory or
-// defeat. Offers "replay" (restart same enemy) and, on
-// victory, "next foe" to advance through the gauntlet.
-// ============================================================
 export default function ResultOverlay({
   phase,
   enemy,
   enemyIdx,
-  victoryReward,
-  selectedRewardKeys = [],
-  onApplyPerk,
   onRestart,
   onNextEnemy,
 }) {
   if (phase !== 'victory' && phase !== 'defeat') return null;
 
   const isVictory = phase === 'victory';
-  const choicesAllowed = victoryReward?.choicesAllowed ?? TUNING.rewardChoicesPerKill;
-  const choicesMade = selectedRewardKeys?.length ?? 0;
+  const runCleared = isVictory && enemyIdx >= TUNING.enemies.length - 1;
 
   return (
     <div style={styles.overlay}>
       <div style={styles.overlayContent}>
-        {/* Large status icon */}
         <div style={styles.overlayMark}>{isVictory ? '✦' : '✖'}</div>
-
-        {/* Title: VICTORY or DEFEAT */}
         <div style={styles.overlayTitle}>{isVictory ? 'VICTORY' : 'DEFEAT'}</div>
-
-        {/* Subtitle with enemy name */}
         <div style={styles.overlaySubtitle}>
-          {isVictory ? `${enemy.name} has fallen` : `${enemy.name} has bested you`}
+          {isVictory
+            ? runCleared
+              ? 'The gauntlet is cleared'
+              : `${enemy.name} has fallen`
+            : `${enemy.name} has bested you`}
         </div>
 
-        {isVictory && (
+        {isVictory && !runCleared && (
           <div style={styles.overlayReward}>
-            <div>Victory reward</div>
-            <div>
-              +{victoryReward?.baseManaGain ?? TUNING.player.manaRegenPerFoe} Mana / +{victoryReward?.baseHpGain ?? TUNING.player.hpRegenPerFoe} HP
-            </div>
-            <div>Choose {choicesAllowed} reward{choicesAllowed !== 1 ? 's' : ''} ({choicesMade}/{choicesAllowed})</div>
+            HP and MP carry forward. Shield resets before the next foe.
           </div>
         )}
 
-        {isVictory && victoryReward && (
-          <div style={styles.perkGrid}>
-            {victoryReward.perks.map((perk) => {
-              const isSelected = selectedRewardKeys.includes(perk.key);
-              const rewardLimitReached = choicesMade >= choicesAllowed;
-              return (
-                <button
-                  key={perk.key}
-                  type="button"
-                  onClick={() => onApplyPerk(perk.key)}
-                  disabled={isSelected || rewardLimitReached}
-                  style={{
-                    ...styles.perkBtn,
-                    ...(isSelected ? styles.perkBtnSelected : {}),
-                    ...(rewardLimitReached && !isSelected ? styles.perkBtnDisabled : {}),
-                  }}
-                  className="overlay-btn"
-                >
-                  <span style={styles.perkLabel}>{perk.label}</span>
-                  {perk.sublabel && (
-                    <span style={{ fontSize: '0.65rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      {perk.sublabel}
-                    </span>
-                  )}
-                  <span style={styles.perkDetail}>{perk.detail}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Action buttons */}
         <div style={styles.overlayButtons}>
-          <button onClick={onRestart} style={styles.overlayBtn} className="overlay-btn">
-            {isVictory ? 'REPLAY' : 'TRY AGAIN'}
+          <button type="button" onClick={onRestart} style={styles.overlayBtn} className="overlay-btn">
+            {isVictory ? 'RESTART RUN' : 'TRY AGAIN'}
           </button>
-          {isVictory && enemyIdx < TUNING.enemies.length - 1 && (
+          {isVictory && !runCleared && (
             <button
+              type="button"
               onClick={onNextEnemy}
-              disabled={choicesMade < choicesAllowed}
-              style={{
-                ...styles.overlayBtn,
-                ...styles.overlayBtnPrimary,
-                ...(choicesMade < choicesAllowed ? styles.overlayBtnDisabled : {}),
-              }}
+              style={{ ...styles.overlayBtn, ...styles.overlayBtnPrimary }}
               className="overlay-btn"
             >
               NEXT FOE →

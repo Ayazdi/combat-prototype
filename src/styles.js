@@ -66,6 +66,19 @@ export const globalCss = `
     animation: handLandIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1.1);
     transform-origin: 50% 100%;
   }
+  .assign-btn {
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+  }
+  .assign-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    border-color: #d4a24c !important;
+    color: #e8d4a8 !important;
+  }
+  .assign-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
   .combat-banner {
     animation: combatBannerIn 0.28s ease-out, combatBannerPulse 1.15s ease-in-out 0.28s infinite alternate;
   }
@@ -175,7 +188,7 @@ export const styles = {
     mixBlendMode: 'overlay',
   },
   frame: {
-    maxWidth: 880,
+    maxWidth: 980,
     margin: '0 auto',
     position: 'relative',
     zIndex: 1,
@@ -274,6 +287,44 @@ export const styles = {
     zIndex: 10,
     whiteSpace: 'normal',
   },
+  infoBadgeRow: {
+    minHeight: 24,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  infoBadgeWrap: {
+    position: 'relative',
+    display: 'inline-block',
+  },
+  infoBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 22,
+    height: 22,
+    padding: '0 5px',
+    borderRadius: 2,
+    border: '1px solid',
+    fontSize: 10,
+    lineHeight: 1,
+    fontWeight: 800,
+    cursor: 'help',
+    userSelect: 'none',
+    fontFamily: '"JetBrains Mono", monospace',
+  },
+  infoBadgeNegative: {
+    background: 'rgba(80, 28, 18, 0.86)',
+    borderColor: 'rgba(199, 74, 50, 0.75)',
+    color: '#ffb18f',
+  },
+  infoBadgeDefense: {
+    background: 'rgba(24, 42, 52, 0.9)',
+    borderColor: 'rgba(101, 169, 200, 0.75)',
+    color: '#b9e7f4',
+  },
 
   // --- Stat bars (HP / MP / Shield) ---
   statBar: { display: 'flex', alignItems: 'center', gap: 10 },
@@ -338,6 +389,10 @@ export const styles = {
     padding: '3px 6px',
     borderRadius: 2,
   },
+  intentShieldText: {
+    color: '#8ab4d8',
+    fontWeight: 700,
+  },
 
   // --- Versus divider ---
   versus: {
@@ -380,7 +435,7 @@ export const styles = {
   },
   row: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
     gap: 12,
     marginBottom: 16,
   },
@@ -402,7 +457,7 @@ export const styles = {
     position: 'relative',
     borderRadius: 2,
   },
-  tileGlyph: { fontSize: 42, lineHeight: 1 },
+  tileGlyph: { fontSize: 36, lineHeight: 1 },
   tileLabel: {
     fontSize: 10,
     letterSpacing: '0.2em',
@@ -570,6 +625,190 @@ export const styles = {
     color: '#3a342a',
     fontStyle: 'italic',
     letterSpacing: '0.1em',
+  },
+
+  // --- Hand allocation ---
+  allocationArea: {
+    marginBottom: 20,
+  },
+  handGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+    gap: 10,
+    marginBottom: 14,
+  },
+  handTileCell: {
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 7,
+  },
+  handTile: {
+    minHeight: 86,
+    border: '2px solid',
+    borderRadius: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    fontFamily: '"Cinzel", serif',
+  },
+  handTileGlyph: {
+    fontSize: 27,
+    lineHeight: 1,
+  },
+  handTileShort: {
+    fontSize: 10,
+    letterSpacing: '0.16em',
+    fontWeight: 700,
+  },
+  assignButtons: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 6,
+  },
+  assignBtn: {
+    height: 30,
+    border: '1px solid #3a342a',
+    background: '#11100d',
+    color: '#8a8070',
+    borderRadius: 2,
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  assignBtnActiveAttack: {
+    background: 'linear-gradient(165deg, #3a1f1a 0%, #24110d 100%)',
+    borderColor: '#a64432',
+    color: '#e8a890',
+  },
+  assignBtnActiveShield: {
+    background: 'linear-gradient(165deg, #1a2838 0%, #10192a 100%)',
+    borderColor: '#3a6fa6',
+    color: '#8ab4d8',
+  },
+  bucketGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: 10,
+  },
+  bucketPanel: {
+    minHeight: 128,
+    border: '1px solid #2a2418',
+    background: 'linear-gradient(180deg, rgba(18, 16, 13, 0.82) 0%, rgba(10, 8, 6, 0.76) 100%)',
+    borderRadius: 2,
+    padding: '10px 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  bucketPanelDisabled: {
+    opacity: 0.48,
+    filter: 'grayscale(0.45)',
+  },
+  bucketHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontFamily: '"Cinzel", serif',
+    fontSize: 12,
+    letterSpacing: '0.2em',
+    color: '#d4a24c',
+    fontWeight: 700,
+  },
+  bucketCount: {
+    fontFamily: '"JetBrains Mono", monospace',
+    letterSpacing: 0,
+    color: '#8a8070',
+  },
+  bucketTiles: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+    minHeight: 28,
+    alignItems: 'center',
+  },
+  bucketTileChip: {
+    width: 26,
+    height: 26,
+    border: '1px solid',
+    borderRadius: 2,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 11,
+    fontWeight: 800,
+  },
+  bucketEmpty: {
+    fontSize: 10,
+    color: '#4a4438',
+    fontStyle: 'italic',
+    letterSpacing: '0.08em',
+  },
+  bucketPreviewAttack: {
+    fontSize: 11,
+    color: '#e8a890',
+    lineHeight: 1.45,
+    minHeight: 16,
+  },
+  bucketPreviewShield: {
+    fontSize: 11,
+    color: '#8ab4d8',
+    lineHeight: 1.45,
+    minHeight: 16,
+  },
+  bucketSegments: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 'auto',
+  },
+
+  // --- Element legend ---
+  elementLegend: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)',
+    gap: 12,
+    alignItems: 'center',
+    background: '#0a0806',
+    border: '1px solid #2a2418',
+    borderRadius: 2,
+    padding: '10px 12px',
+    marginBottom: 20,
+  },
+  elementLegendTiles: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  elementLegendItem: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 0,
+  },
+  elementLegendIcon: {
+    width: 24,
+    height: 24,
+    border: '1px solid',
+    borderRadius: 2,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+  },
+  elementLegendText: {
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    color: '#b8a88a',
+    whiteSpace: 'nowrap',
+  },
+  elementLegendRule: {
+    fontSize: 10,
+    lineHeight: 1.45,
+    color: '#8a8070',
+    letterSpacing: '0.06em',
   },
 
   // --- Ability combo reference ---
@@ -836,6 +1075,11 @@ export const styles = {
     background: 'rgba(180, 60, 20, 0.25)',
     border: '1px solid rgba(200, 80, 30, 0.6)',
     color: '#e8a060',
+  },
+  statusBadgeFreeze: {
+    background: 'rgba(50, 110, 150, 0.25)',
+    border: '1px solid rgba(90, 170, 210, 0.6)',
+    color: '#a9e4f5',
   },
   statusBadgeVulnerable: {
     background: 'rgba(160, 120, 20, 0.25)',

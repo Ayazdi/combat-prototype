@@ -1,258 +1,420 @@
-import { TUNING, ABILITY_COMBOS, PASSIVE_ABILITIES } from './constants';
+import { ELEMENTS, TUNING } from './constants.js';
+
+export const createEmptyStatuses = () => ({
+  burn: null,
+  freeze: { stacks: 0 },
+});
 
 export const weightedRoll = (weights) => {
-  const total = Object.values(weights).reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (const [key, w] of Object.entries(weights)) {
-    if ((r -= w) < 0) return key;
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  let roll = Math.random() * total;
+
+  for (const [key, weight] of Object.entries(weights)) {
+    roll -= weight;
+    if (roll < 0) return key;
   }
+
   return Object.keys(weights)[0];
 };
 
-export const rollRow = (weights, size = TUNING.draft.rowSize) => {
+export const rollRow = (weights, size = TUNING.hand.rowSize) => {
   const row = Array.from({ length: size }, () => weightedRoll(weights));
-  // Anti-degenerate: if all same or all empty, reroll one slot
-  if (row.every((t) => t === row[0])) {
-    const idx = Math.floor(Math.random() * size);
-    const others = Object.keys(weights).filter((k) => k !== row[0]);
-    row[idx] = others[Math.floor(Math.random() * others.length)];
+
+  if (row.every((tile) => tile === row[0])) {
+    const rerollIndex = Math.floor(Math.random() * size);
+    const alternatives = Object.keys(weights).filter((tile) => tile !== row[0] && weights[tile] > 0);
+    row[rerollIndex] = alternatives[Math.floor(Math.random() * alternatives.length)];
   }
+
   return row;
 };
 
-export const computeResolution = (committed, modifiers = {}) => {
-  let damage = 0;
-  let block = 0;
-  let mana = 0;
-  const segments = [];
-  const damageMultiplier = modifiers.damageMultiplier ?? 1;
-  const defenceMultiplier = modifiers.defenceMultiplier ?? 1;
-
-  // Parse committed tiles into contiguous runs and compute each segment's output.
-  let i = 0;
-  while (i < committed.length) {
-    const t = committed[i];
-    if (t === 'E') { segments.push({ type: 'E', count: 1 }); i++; continue; }
-    let j = i;
-    while (j < committed.length && committed[j] === t) j++;
-    const count = j - i;
-    const cap = Math.min(count, 5);
-    if (t === 'A') {
-      const mult = TUNING.tiles.attackCombos[cap] || 1;
-      const dmg = Math.round(TUNING.tiles.attackBase * mult * damageMultiplier);
-      damage += dmg;
-      segments.push({ type: 'A', count, damage: dmg, mult });
-    } else if (t === 'D') {
-      const mult = TUNING.tiles.defenceCombos[cap] || 1;
-      const blk = Math.round(TUNING.tiles.defenceBase * mult * defenceMultiplier);
-      block += blk;
-      segments.push({ type: 'D', count, block: blk, mult });
-    } else if (t === 'M') {
-      const mult = TUNING.tiles.manaCombos[cap] || 1;
-      const gained = Math.round(TUNING.tiles.manaBase * mult);
-      mana += gained;
-      segments.push({ type: 'M', count, mana: gained, mult });
-    }
-    i = j;
-  }
-  return { damage, block, mana, segments };
-};
-
-export const getAbilityCombo = (committed, unlockedAbilityIds = null) => {
-  const filtered = committed.filter((t) => t !== null && t !== undefined);
-  if (filtered.length !== 5) return null;
-  const sequence = filtered.join('');
-  return ABILITY_COMBOS.find((combo) => (
-    combo.pattern === sequence && (!unlockedAbilityIds || unlockedAbilityIds.includes(combo.id))
-  )) || null;
-};
-
-export const computeAbilityResolution = (combo, context = {}) => {
-  const damageMultiplier = context.damageMultiplier ?? 1;
-  const defenceMultiplier = context.defenceMultiplier ?? 1;
-  const playerShield = context.playerShield ?? 0;
-  const lastDamageTaken = context.lastDamageTaken ?? 0;
-  const passives = context.passives ?? [];
-  const hasPrecision = passives.includes('precision');
-  const precisionMult = hasPrecision ? 1.25 : 1;
-
-  // Base tile damage/block/mana from the pattern (e.g. AAAAA → 5A damage, DDDAA → DDD block + AA dmg)
-  const { damage: baseTileDmg, block: baseTileBlock, mana: baseTileMana } = computeResolution(
-    combo.pattern.split(''),
-    { damageMultiplier, defenceMultiplier },
-  );
-
-  const base = {
-    kind: 'ability',
-    ability: combo,
-    tiles: combo.pattern.split(''),
-    sequence: combo.pattern,
-    length: combo.pattern.length,
-    damage: baseTileDmg,
-    block: baseTileBlock,
-    mana: baseTileMana,
-    heal: 0,
-    manaCost: 0,
-    hits: null,
-    statusEffect: null,
-    abilityBonus: 0,
-    effects: [],
-    segments: [{
-      type: 'ABILITY',
-      count: 5,
-      pattern: combo.pattern,
-      name: combo.name,
-      detail: combo.detail,
-    }],
-  };
-
-  const scaledDamage = (v) => Math.round(v * damageMultiplier);
-
-  switch (combo.effect) {
-    case 'barrage': {
-      return {
-        ...base,
-        statusEffect: { type: 'burn' },
-        effects: ['Apply Burn'],
-      };
-    }
-    case 'endure':
-      return {
-        ...base,
-        statusEffect: { type: 'endure' },
-        effects: ['Absorb next enemy hit'],
-      };
-    case 'press':
-      return {
-        ...base,
-        statusEffect: { type: 'vulnerable' },
-        effects: ['Apply Vulnerable'],
-      };
-    case 'counter': {
-      const hasMomentum = passives.includes('momentum');
-      const mult = hasMomentum ? 0.8 : 0.5;
-      const bonusDmg = Math.round(playerShield * mult * precisionMult);
-      return {
-        ...base,
-        damage: baseTileDmg + scaledDamage(bonusDmg),
-        abilityBonus: bonusDmg,
-        effects: [`Counter bonus: +${bonusDmg} dmg (from ${playerShield} shield)`],
-      };
-    }
-    case 'riposte': {
-      const hasMomentum = passives.includes('momentum');
-      const mult = hasMomentum ? 0.8 : 0.5;
-      const bonusDmg = Math.round(lastDamageTaken * mult * precisionMult);
-      return {
-        ...base,
-        damage: baseTileDmg + scaledDamage(bonusDmg),
-        abilityBonus: bonusDmg,
-        effects: [`Riposte bonus: +${bonusDmg} dmg (from ${lastDamageTaken} last hit)`],
-      };
-    }
-    case 'drain': {
-      const hasPredator = passives.includes('predator');
-      const stealAmount = hasPredator ? 40 : 20;
-      const stealAmountScaled = Math.round(stealAmount * precisionMult);
-      return {
-        ...base,
-        abilityBonus: stealAmountScaled,
-        effects: [`Drain: steal up to ${stealAmountScaled} enemy shield`],
-      };
-    }
-    default:
-      return base;
-  }
-};
-
-/**
- * Validate the submitted sequence and return its resolution.
- * A submission is valid if it contains at least one contiguous run of
- * >= TUNING.tiles.minComboLength identical tiles of type A, D, or M,
- * or if a 5-card ability combo is matched.
- * Returns null when invalid.
- */
-export const findBestAcceptedSequence = (committed, modifiers = {}) => {
-  const filtered = committed.filter((t) => t !== null && t !== undefined);
-  if (filtered.length === 0) return null;
-
-  const abilityCombo = getAbilityCombo(filtered, modifiers.unlockedAbilityIds);
-  if (abilityCombo) {
-    return computeAbilityResolution(abilityCombo, modifiers);
-  }
-
-  const { damage, block, mana, segments } = computeResolution(filtered, modifiers);
-
-  const hasValidRun = segments.some(
-    (s) => (s.type === 'A' || s.type === 'D' || s.type === 'M') && s.count >= TUNING.tiles.minComboLength,
-  );
-
-  if (!hasValidRun) return null;
-
-  return {
-    kind: 'basic',
-    tiles: filtered,
-    damage,
-    block,
-    mana,
-    heal: 0,
-    manaCost: 0,
-    segments,
-    length: filtered.length,
-    sequence: filtered.join(''),
-  };
-};
-
-/** Check whether the submitted hand contains any accepted combo */
-export const isValidSequence = (committed, modifiers = {}) => {
-  return Boolean(findBestAcceptedSequence(committed, modifiers));
-};
-
-export const abilityDescription = (key) => {
-  switch (key) {
-    case 'charged_strike': return 'Every 3rd attack is Charged Strike (50 dmg)';
-    case 'empty_plus': return 'Battle deck shifts +4 No Action tiles';
-    case 'armored': return 'Reduces incoming hit damage by 10';
-    case 'adaptive': return 'Gains +25 shield whenever you reroll or discard';
-    case 'double_discard': return 'Discard limit halved (1 per enemy)';
-    default: return '';
-  }
-};
-
-/**
- * Build and return a shuffled deck array from a composition object.
- * e.g. { A: 10, D: 8, E: 22 } -> 40-element shuffled array.
- */
-export const buildShuffledDeck = (composition) => {
+export const buildShuffledDeck = (composition = TUNING.deckComposition) => {
   const deck = [];
-  for (const [type, count] of Object.entries(composition)) {
-    for (let i = 0; i < count; i++) deck.push(type);
+  for (const [tile, count] of Object.entries(composition)) {
+    for (let i = 0; i < count; i += 1) deck.push(tile);
   }
-  // Fisher-Yates shuffle
-  for (let i = deck.length - 1; i > 0; i--) {
+
+  for (let i = deck.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
+
   return deck;
 };
 
-/**
- * Draw one card from the end of the deck array.
- * If the deck is empty, auto-reshuffles from fallbackComposition before drawing.
- * Returns { card, deck, reshuffled } — the drawn card, remaining deck,
- * and whether this draw had to reshuffle first.
- */
-export const drawFromDeck = (deck, fallbackComposition) => {
+export const drawFromDeck = (deck, fallbackComposition = TUNING.deckComposition) => {
   const reshuffled = deck.length === 0;
-  const d = reshuffled ? buildShuffledDeck(fallbackComposition) : deck;
-  const card = d[d.length - 1];
-  return { card, deck: d.slice(0, -1), reshuffled };
+  const workingDeck = reshuffled ? buildShuffledDeck(fallbackComposition) : deck;
+  const card = workingDeck[workingDeck.length - 1];
+  return {
+    card,
+    deck: workingDeck.slice(0, -1),
+    reshuffled,
+  };
 };
 
-/** Check if a passive's requirements are met given owned ability combo IDs */
-export const isPassiveAvailable = (passive, ownedAbilityIds) => {
-  if (passive.requiresAll) return passive.requiresAll.every((r) => ownedAbilityIds.includes(r));
-  if (passive.requiresAny) return passive.requiresAny.some((r) => ownedAbilityIds.includes(r));
-  if (passive.requires) return ownedAbilityIds.includes(passive.requires);
-  return true; // universal passives always available
+export const drawManyFromDeck = (deck, count, fallbackComposition = TUNING.deckComposition) => {
+  let workingDeck = deck;
+  const cards = [];
+  let reshuffleCount = 0;
+
+  for (let i = 0; i < count; i += 1) {
+    const result = drawFromDeck(workingDeck, fallbackComposition);
+    cards.push(result.card);
+    workingDeck = result.deck;
+    if (result.reshuffled) reshuffleCount += 1;
+  }
+
+  return {
+    cards,
+    deck: workingDeck,
+    reshuffleCount,
+  };
 };
+
+export const countDeckByElement = (deck = []) => deck.reduce(
+  (counts, tile) => {
+    counts[tile] = (counts[tile] || 0) + 1;
+    return counts;
+  },
+  { steel: 0, fire: 0, ice: 0, empty: 0 },
+);
+
+export const replaceRowSlotFromDeck = (row, index, deck, fallbackComposition = TUNING.deckComposition) => {
+  const result = drawFromDeck(deck, fallbackComposition);
+  const nextRow = [...row];
+  nextRow[index] = result.card;
+  return {
+    row: nextRow,
+    deck: result.deck,
+    reshuffled: result.reshuffled,
+  };
+};
+
+export const countTiles = (tiles = []) => tiles.reduce(
+  (counts, tile) => {
+    if (tile && tile !== 'empty') counts[tile] = (counts[tile] || 0) + 1;
+    return counts;
+  },
+  { steel: 0, fire: 0, ice: 0 },
+);
+
+const comboMultiplier = (count) => TUNING.combos[Math.min(count, TUNING.hand.handSize)] || 0;
+
+const round = (value) => Math.round(value);
+
+const buildEmptyBucketResult = (action, tiles) => ({
+  action,
+  tiles,
+  damage: 0,
+  block: 0,
+  burnStacks: 0,
+  freezeStacks: 0,
+  contactBurnStacks: 0,
+  contactFreezeStacks: 0,
+  counts: { steel: 0, fire: 0, ice: 0 },
+  activeCounts: { steel: 0, fire: 0, ice: 0 },
+  cancelledPairs: 0,
+  segments: [],
+});
+
+export const computeActionBucket = (tiles = [], action = 'attack', targetFreezeStacks = 0) => {
+  const realTiles = tiles.filter(Boolean);
+  const counts = countTiles(realTiles);
+  const result = buildEmptyBucketResult(action, realTiles);
+  result.counts = counts;
+
+  const cancelledPairs = Math.min(counts.fire, counts.ice);
+  const survivingFire = counts.fire - cancelledPairs;
+  const survivingIce = counts.ice - cancelledPairs;
+  result.cancelledPairs = cancelledPairs;
+  result.activeCounts = {
+    steel: counts.steel,
+    fire: survivingFire,
+    ice: survivingIce,
+  };
+
+  if (cancelledPairs > 0) {
+    const fireBase = action === 'shield' ? TUNING.elements.fire.shieldBase : TUNING.elements.fire.atkBase;
+    const iceBase = action === 'shield' ? TUNING.elements.ice.shieldBase : TUNING.elements.ice.atkBase;
+    const value = cancelledPairs * fireBase + cancelledPairs * iceBase;
+    if (action === 'shield') result.block += value;
+    else result.damage += value;
+    result.segments.push({
+      type: 'cancelled',
+      fire: cancelledPairs,
+      ice: cancelledPairs,
+      value,
+      action,
+    });
+  }
+
+  if (counts.steel > 0) {
+    const mult = comboMultiplier(counts.steel);
+    if (action === 'shield') {
+      const block = round(TUNING.elements.steel.shieldBase * counts.steel * mult);
+      result.block += block;
+      result.segments.push({ type: 'steel', count: counts.steel, mult, block });
+    } else {
+      const baseDamage = round(TUNING.elements.steel.atkBase * counts.steel * mult);
+      const freezeMultiplier = 1 + targetFreezeStacks * TUNING.status.freezeMultPerStack;
+      const damage = round(baseDamage * freezeMultiplier);
+      result.damage += damage;
+      result.segments.push({
+        type: 'steel',
+        count: counts.steel,
+        mult,
+        baseDamage,
+        damage,
+        freezeMultiplier,
+      });
+    }
+  }
+
+  if (survivingFire > 0) {
+    const mult = comboMultiplier(survivingFire);
+    if (action === 'shield') {
+      const block = round(TUNING.elements.fire.shieldBase * survivingFire * mult);
+      result.block += block;
+      result.contactBurnStacks += survivingFire;
+      result.segments.push({ type: 'fire', count: survivingFire, mult, block, contactBurnStacks: survivingFire });
+    } else {
+      const damage = round(TUNING.elements.fire.atkBase * survivingFire * mult);
+      result.damage += damage;
+      result.burnStacks += survivingFire;
+      result.segments.push({ type: 'fire', count: survivingFire, mult, damage, burnStacks: survivingFire });
+    }
+  }
+
+  if (survivingIce > 0) {
+    const mult = comboMultiplier(survivingIce);
+    if (action === 'shield') {
+      const block = round(TUNING.elements.ice.shieldBase * survivingIce * mult);
+      result.block += block;
+      result.contactFreezeStacks += survivingIce;
+      result.segments.push({ type: 'ice', count: survivingIce, mult, block, contactFreezeStacks: survivingIce });
+    } else {
+      const damage = round(TUNING.elements.ice.atkBase * survivingIce * mult);
+      result.damage += damage;
+      result.freezeStacks += survivingIce;
+      result.segments.push({ type: 'ice', count: survivingIce, mult, damage, freezeStacks: survivingIce });
+    }
+  }
+
+  return result;
+};
+
+export const applyStatus = (currentStatuses, incomingStacks, type) => {
+  if (!incomingStacks || incomingStacks <= 0) return currentStatuses;
+
+  if (type === 'burn') {
+    const existingStacks = currentStatuses.burn?.stacks || 0;
+    return {
+      ...currentStatuses,
+      burn: {
+        stacks: Math.min(TUNING.status.burnMaxStacks, existingStacks + incomingStacks),
+        turnsLeft: TUNING.status.burnDuration,
+      },
+    };
+  }
+
+  if (type === 'freeze') {
+    const existingStacks = currentStatuses.freeze?.stacks || 0;
+    return {
+      ...currentStatuses,
+      freeze: {
+        stacks: Math.min(TUNING.status.freezeMaxStacks, existingStacks + incomingStacks),
+      },
+    };
+  }
+
+  return currentStatuses;
+};
+
+export const tickStatuses = (statuses) => {
+  const burnStacks = statuses.burn?.stacks || 0;
+  const burnDamage = burnStacks * TUNING.status.burnPerStack;
+  const burnTurnsLeft = statuses.burn?.turnsLeft || 0;
+  const nextBurnTurns = Math.max(0, burnTurnsLeft - 1);
+  const nextBurn = burnStacks > 0 && nextBurnTurns > 0
+    ? { stacks: burnStacks, turnsLeft: nextBurnTurns }
+    : null;
+
+  const freezeStacks = statuses.freeze?.stacks || 0;
+  const nextFreezeStacks = Math.max(0, freezeStacks - 1);
+
+  return {
+    burnDamage,
+    freezeLost: freezeStacks - nextFreezeStacks,
+    statuses: {
+      burn: nextBurn,
+      freeze: { stacks: nextFreezeStacks },
+    },
+  };
+};
+
+export const applyDamageToShieldedTarget = (damage, shield, hp, options = {}) => {
+  const absorbed = Math.min(shield, damage);
+  const damagePastShield = damage - absorbed;
+  const shieldAfter = shield - absorbed;
+  const reduction = damagePastShield > 0 && options.reduceHpDamageBy
+    ? Math.min(options.reduceHpDamageBy, damagePastShield)
+    : 0;
+  const hpDamage = Math.max(0, damagePastShield - reduction);
+
+  return {
+    shield: shieldAfter,
+    hp: Math.max(0, hp - hpDamage),
+    absorbed,
+    hpDamage,
+    reduction,
+  };
+};
+
+export const computeEnemyShieldFromTiles = (shieldElement, shieldTiles = 0, options = {}) => {
+  if (!shieldElement || shieldTiles <= 0) {
+    return {
+      block: 0,
+      shieldElement: null,
+      shieldTiles: 0,
+      contactBurnStacks: 0,
+      contactFreezeStacks: 0,
+    };
+  }
+
+  const mult = TUNING.combos[Math.min(shieldTiles, TUNING.hand.handSize)] || 1;
+  const baseBlock = TUNING.elements[shieldElement]?.shieldBase || 0;
+  const unmodifiedBlock = Math.round(baseBlock * shieldTiles * mult);
+  const block = options.wardMastery ? Math.round(unmodifiedBlock * 1.25) : unmodifiedBlock;
+  const contactStacks = shieldElement === 'fire' || shieldElement === 'ice'
+    ? Math.ceil(shieldTiles / 2)
+    : 0;
+
+  return {
+    block,
+    unmodifiedBlock,
+    shieldElement,
+    shieldTiles,
+    contactBurnStacks: shieldElement === 'fire' ? contactStacks : 0,
+    contactFreezeStacks: shieldElement === 'ice' ? contactStacks : 0,
+  };
+};
+
+export const getIntentShieldInfo = (intent = {}, enemy = {}) => {
+  if (intent.shieldTiles > 0) {
+    return computeEnemyShieldFromTiles(
+      intent.shieldElement || 'steel',
+      intent.shieldTiles,
+      { wardMastery: enemy.traits?.includes('ward_mastery') },
+    );
+  }
+
+  if (intent.shield > 0) {
+    return {
+      block: intent.shield,
+      unmodifiedBlock: intent.shield,
+      shieldElement: intent.shieldElement || 'steel',
+      shieldTiles: 0,
+      contactBurnStacks: 0,
+      contactFreezeStacks: 0,
+    };
+  }
+
+  return computeEnemyShieldFromTiles(null, 0);
+};
+
+export const createShieldContact = ({
+  contactBurnStacks = 0,
+  contactFreezeStacks = 0,
+  shieldTiles = 0,
+  block = 0,
+  unmodifiedBlock = 0,
+} = {}) => ({
+  contactBurnStacks,
+  contactFreezeStacks,
+  shieldTiles,
+  block,
+  unmodifiedBlock,
+});
+
+export const resolveAttackAgainstShield = (attackResult, shieldState) => {
+  const {
+    shield = 0,
+    hp = 0,
+    shieldElement = null,
+    shieldContact = createShieldContact(),
+    hpDamageReduction = 0,
+  } = shieldState || {};
+
+  const damage = applyDamageToShieldedTarget(
+    attackResult.damage,
+    shield,
+    hp,
+    { reduceHpDamageBy: shield > 0 ? hpDamageReduction : 0 },
+  );
+  const shieldContacted = damage.absorbed > 0;
+  let contactBurnStacks = shieldContacted ? shieldContact.contactBurnStacks || 0 : 0;
+  let contactFreezeStacks = shieldContacted ? shieldContact.contactFreezeStacks || 0 : 0;
+  let attackBurnStacks = attackResult.burnStacks;
+  let attackFreezeStacks = attackResult.freezeStacks;
+  let cancelledByFire = 0;
+  let cancelledByIce = 0;
+
+  if (shieldContacted && shieldElement === 'fire' && contactBurnStacks > 0) {
+    cancelledByIce = Math.min(attackResult.activeCounts?.ice || 0, contactBurnStacks);
+    contactBurnStacks -= cancelledByIce;
+    attackFreezeStacks = Math.max(0, attackFreezeStacks - cancelledByIce);
+  }
+
+  if (shieldContacted && shieldElement === 'ice' && contactFreezeStacks > 0) {
+    cancelledByFire = Math.min(attackResult.activeCounts?.fire || 0, contactFreezeStacks);
+    contactFreezeStacks -= cancelledByFire;
+    attackBurnStacks = Math.max(0, attackBurnStacks - cancelledByFire);
+  }
+
+  return {
+    ...damage,
+    shieldContacted,
+    shieldElement,
+    attackBurnStacks,
+    attackFreezeStacks,
+    contactBurnStacks,
+    contactFreezeStacks,
+    cancelledByFire,
+    cancelledByIce,
+  };
+};
+
+export const getNextFoePlayerCarryover = ({ hp, mana }) => ({
+  hp,
+  mana,
+  shield: 0,
+});
+
+export const elementLabel = (element) => ELEMENTS[element]?.label || element;
+
+export const describeIntent = (intent) => {
+  const shieldInfo = intent.shieldInfo || getIntentShieldInfo(intent);
+  const shieldText = shieldInfo.block > 0
+    ? ` + ${shieldInfo.block} ${elementLabel(shieldInfo.shieldElement)} shield`
+    : '';
+  return `${intent.dmg} ${elementLabel(intent.element)}${shieldText}`;
+};
+
+export const getEnemyIntent = (enemy, turn) => {
+  const pattern = enemy.pattern || [];
+  return pattern[(turn - 1) % pattern.length] || { dmg: 0, element: 'steel' };
+};
+
+export const getEnemyIntentQueue = (enemy, turn, size = 2) => (
+  Array.from({ length: size }, (_, index) => {
+    const intent = getEnemyIntent(enemy, turn + index);
+    const shieldInfo = getIntentShieldInfo(intent, enemy);
+    return {
+      ...intent,
+      shieldInfo,
+      text: describeIntent({ ...intent, shieldInfo }),
+    };
+  })
+);
