@@ -3,15 +3,12 @@ import { tileGlyph, tileLabel, tileStyle } from '../tileHelpers';
 import { TUNING } from '../constants';
 
 // ============================================================
-// DraftArea — the main drafting interface.
+// DraftArea — the drafting board.
 //
 // Shows:
-//   • The current draft row of tiles (player picks one per round)
-//   • A pick counter ("PICK 2 / 5")
-//   • Reroll, Discard, and SUBMIT buttons
-//
-// The player builds a sequence of up to maxSequence tiles then
-// hits SUBMIT. Only accepted pure sequences (AA, DDD, …) pass.
+//   • 6-tile board row (player picks one per turn)
+//   • Hand progress counter
+//   • Reroll and RESOLVE controls
 // ============================================================
 export default function DraftArea({
   phase,
@@ -21,56 +18,49 @@ export default function DraftArea({
   discardsLeftEnemy,
   playerMana,
   deckSize,
-  deckCounts,
   deckShuffleCount,
-  deckIsShuffled,
-  picksUsed,
-  pickLimit,
-  committedLength,
-  selectedCommittedIndex,
-  sequenceValid,
-  sequenceFull,
+  handLength,
+  handFull,
+  allTilesAllocated,
   onPickTile,
   onReroll,
-  onDiscardSelected,
   onDiscardBoardTile,
-  onSubmit,
+  onResolve,
 }) {
-  const rerollDisabled = phase !== 'drafting' || rerollsLeftEnemy <= 0 || playerMana < TUNING.draft.rerollManaCost;
+  const rerollDisabled =
+    phase !== 'drafting' || rerollsLeftEnemy <= 0 || playerMana < TUNING.draft.rerollManaCost;
 
-  const discardDisabled =
+  const boardDiscardDisabled =
     phase !== 'drafting' ||
-    committedLength === 0 ||
-    selectedCommittedIndex === null ||
     discardsLeftEnemy <= 0 ||
     playerMana < TUNING.draft.discardManaCost;
 
-  // Can't pick more tiles once we hit the max
-  const pickDisabled = phase !== 'drafting' || sequenceFull;
-  const boardDiscardDisabled = phase !== 'drafting' || discardsLeftEnemy <= 0 || playerMana < TUNING.draft.discardManaCost;
+  const pickDisabled = phase !== 'drafting' || handFull;
 
-  // Submit requires at least 1 tile committed
-  const submitDisabled = phase !== 'drafting' || committedLength === 0;
+  const resolveDisabled = phase !== 'drafting' || !allTilesAllocated;
+
+  const hint =
+    phase !== 'drafting'
+      ? phase === 'resolving'
+        ? 'resolving…'
+        : ''
+      : handFull
+        ? allTilesAllocated
+          ? '✓ all tiles allocated — hit RESOLVE'
+          : 'allocate all tiles to resolve'
+        : `draft your hand · rerolls left: ${rerollsLeftEnemy}`;
 
   return (
     <section style={styles.draftArea}>
       {/* Pick counter + status hint */}
       <div style={styles.roundHeader}>
         <span style={styles.roundLabel}>
-          PICKS {picksUsed} / {pickLimit}
+          TILES {handLength} / {TUNING.hand.handSize}
         </span>
-        <span style={styles.hint}>
-          {phase === 'drafting'
-            ? sequenceFull
-              ? 'max reached — submit or discard'
-              : `choose one tile • rerolls left this enemy: ${rerollsLeftEnemy}`
-            : phase === 'resolving'
-              ? 'resolving…'
-              : ''}
-        </span>
+        <span style={styles.hint}>{hint}</span>
       </div>
 
-      {/* Tile row — one button per tile */}
+      {/* 6-tile board row */}
       <div style={styles.row}>
         {currentRow.map((tile, i) => (
           <div key={i} style={styles.tileWrap}>
@@ -93,8 +83,7 @@ export default function DraftArea({
                 ...(boardDiscardDisabled ? styles.boardDiscardBtnDisabled : {}),
               }}
               className="tile-discard-btn"
-              aria-label={`Discard ${tileLabel(tile)} from board`}
-              title={`Discard from board (${discardsLeftEnemy} left)`}
+              title={`Discard (${discardsLeftEnemy} left · ${TUNING.draft.discardManaCost} MP)`}
             >
               x
             </button>
@@ -102,18 +91,13 @@ export default function DraftArea({
         ))}
       </div>
 
-      {/* Deck tracking panel */}
+      {/* Deck info */}
       <div style={styles.deckInfo}>
-        <span style={styles.deckChip}>LEFT: {deckSize}</span>
-        <span style={styles.deckChip}>A: {deckCounts?.A ?? 0}</span>
-        <span style={styles.deckChip}>D: {deckCounts?.D ?? 0}</span>
-        <span style={styles.deckChip}>M: {deckCounts?.M ?? 0}</span>
-        <span style={styles.deckChip}>E: {deckCounts?.E ?? 0}</span>
-        <span style={styles.deckChip}>SHUFFLED: {deckIsShuffled ? 'YES' : 'NO'}</span>
+        <span style={styles.deckChip}>DECK: {deckSize}</span>
         <span style={styles.deckChip}>SHUFFLES: {deckShuffleCount}</span>
       </div>
 
-      {/* Reroll / Discard / Submit controls */}
+      {/* Controls */}
       <div style={styles.controls3}>
         <button
           onClick={onReroll}
@@ -126,41 +110,25 @@ export default function DraftArea({
         >
           <span style={styles.ctrlIcon}>↻</span>
           <span>REROLL ({rerollsLeftEnemy}/1)</span>
-          <span style={styles.ctrlCost}>{TUNING.draft.rerollManaCost} MP • {rerollsLeftEnemy} LEFT</span>
+          <span style={styles.ctrlCost}>{TUNING.draft.rerollManaCost} MP</span>
         </button>
 
+        {/* Resolve — highlighted when all tiles allocated */}
         <button
-          onClick={onDiscardSelected}
-          disabled={discardDisabled}
+          onClick={onResolve}
+          disabled={resolveDisabled}
           style={{
             ...styles.controlBtn,
-            ...(discardDisabled ? styles.controlBtnDisabled : {}),
-          }}
-          className="ctrl-btn"
-        >
-          <span style={styles.ctrlIcon}>✕</span>
-          <span>DISCARD SELECTED</span>
-          <span style={styles.ctrlCost}>{TUNING.draft.discardManaCost} MP • {discardsLeftEnemy} LEFT</span>
-        </button>
-
-        {/* SUBMIT — highlighted green when the sequence is valid */}
-        <button
-          onClick={onSubmit}
-          disabled={submitDisabled}
-          style={{
-            ...styles.controlBtn,
-            ...(submitDisabled
+            ...(resolveDisabled
               ? styles.controlBtnDisabled
-              : sequenceValid
-                ? styles.submitBtnValid
-                : styles.submitBtnInvalid),
+              : styles.submitBtnValid),
           }}
           className="ctrl-btn"
         >
           <span style={styles.ctrlIcon}>⏎</span>
-          <span>SUBMIT</span>
+          <span>RESOLVE</span>
           <span style={styles.ctrlCost}>
-            {sequenceValid ? '✓ VALID' : '✗ INVALID'}
+            {allTilesAllocated ? '✓ READY' : 'ALLOCATE ALL'}
           </span>
         </button>
       </div>
