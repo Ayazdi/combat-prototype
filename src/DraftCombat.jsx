@@ -1,102 +1,103 @@
 import useCombat from './useCombat';
 import { styles, globalCss } from './styles';
-import { PASSIVE_ABILITIES } from './constants';
+import { TUNING } from './constants';
 
-// Sub-components — each handles one visual section of the UI
 import Header from './components/Header';
 import Combatants from './components/Combatants';
 import DraftArea from './components/DraftArea';
-import AbilityCombos from './components/AbilityCombos';
-import CommittedSequence from './components/CommittedSequence';
+import HandAndAllocation from './components/HandAndAllocation';
 import CombatLog from './components/CombatLog';
 import CombatBanner from './components/CombatBanner';
 import ResultOverlay from './components/ResultOverlay';
-import AbilitySelectOverlay from './components/AbilitySelectOverlay';
 
 // ============================================================
-// DraftCombat — top-level layout shell.
-//
-// All game state lives in the useCombat() hook.
-// This component simply wires state -> child components.
+// DraftCombat — top-level layout shell (Phase 2).
+// All game state lives in useCombat(). This component wires
+// state → child components only.
 // ============================================================
 export default function DraftCombat() {
   const { state, actions } = useCombat();
 
+  const rerollsLeftEnemy = TUNING.draft.maxRerollsPerEnemy - state.rerollsUsedEnemy;
+  const discardsLeftEnemy = TUNING.draft.maxDiscardsPerTurn - state.discardsUsedEnemy;
+
+  // Per-element deck counts for the DraftArea display
+  const deckCounts = (state.deck ?? []).reduce(
+    (acc, t) => ({ ...acc, [t]: (acc[t] ?? 0) + 1 }),
+    { S: 0, F: 0, I: 0, E: 0 },
+  );
+
+  // Shield preview for Combatants: show what current allocation would give
+  const shieldPreview = state.allocPreview?.shieldResult
+    ? {
+        steel: state.allocPreview.shieldResult.steelBlock,
+        ice: state.allocPreview.shieldResult.iceBurnCancel,
+        fire: state.allocPreview.shieldResult.fireFreezeCancel,
+      }
+    : { steel: 0, ice: 0, fire: 0 };
+
   return (
     <div style={styles.root}>
-      {/* Inject global CSS (hover effects, keyframes) */}
       <style>{globalCss}</style>
-
-      {/* Decorative background grain overlay */}
       <div style={styles.bgGrain} />
 
       <div style={styles.frame}>
-        {/* Game title + stage progression dots */}
         <Header enemyIdx={state.enemyIdx} turn={state.turn} />
 
-        {/* Player & enemy stat bars + telegraph */}
         <Combatants
+          phase={state.phase}
           playerHp={state.playerHp}
           playerMana={state.playerMana}
-          playerShield={state.playerShield}
+          playerShieldBreakdown={state.playerShieldBreakdown}
+          shieldPreview={shieldPreview}
+          playerBurnStacks={state.playerBurnStacks}
+          playerBurnDuration={state.playerBurnDuration}
+          playerFreezeStacks={state.playerFreezeStacks}
           enemy={state.enemy}
           enemyHp={state.enemyHp}
-          enemyShield={state.enemyShield}
-          enemyTelegraph={state.enemyTelegraph}
-          enemyIntentQueue={state.enemyIntentQueue}
-          statusEffects={state.statusEffects}
+          enemyBurnStacks={state.enemyBurnStacks}
+          enemyBurnDuration={state.enemyBurnDuration}
+          enemyFreezeStacks={state.enemyFreezeStacks}
+          currentIntent={state.currentIntent}
+          nextIntent={state.nextIntent}
         />
 
-        {/* Tile draft row + reroll / discard / submit controls */}
         <DraftArea
           phase={state.phase}
           currentRow={state.currentRow}
           boardCardAnimationKeys={state.boardCardAnimationKeys}
-          rerollsLeftEnemy={state.rerollsLeftEnemy}
-          discardsLeftEnemy={state.discardsLeftEnemy}
+          rerollsLeftEnemy={rerollsLeftEnemy}
+          discardsLeftEnemy={discardsLeftEnemy}
           playerMana={state.playerMana}
-          deckSize={state.deckSize}
-          deckCounts={state.deckCounts}
+          deckCounts={deckCounts}
           deckShuffleCount={state.deckShuffleCount}
-          deckIsShuffled={state.deckIsShuffled}
-          picksUsed={state.picksUsed}
-          pickLimit={state.pickLimit}
-          committedLength={state.committed.length}
-          selectedCommittedIndex={state.selectedCommittedIndex}
-          sequenceValid={state.sequenceValid}
-          sequenceFull={state.sequenceFull}
+          handLength={state.hand.length}
+          handFull={state.handFull}
+          allTilesAllocated={state.allTilesAllocated}
           onPickTile={actions.pickTile}
           onReroll={actions.reroll}
-          onDiscardSelected={actions.discardSelected}
           onDiscardBoardTile={actions.discardBoardTile}
-          onSubmit={actions.submitSequence}
+          onResolve={actions.resolveAllocation}
         />
 
-        {/* Ability combo + passive reference */}
-        <AbilityCombos
-          combos={state.unlockedAbilityCombos}
-          passives={state.playerPassives.map((id) => PASSIVE_ABILITIES.find((p) => p.id === id)).filter(Boolean)}
-          totalCombos={state.totalAbilityComboCount}
-          totalPassives={PASSIVE_ABILITIES.length}
+        <HandAndAllocation
+          hand={state.hand}
+          allocationSlots={state.allocationSlots}
+          allocPreview={state.allocPreview}
+          phase={state.phase}
+          allTilesAllocated={state.allTilesAllocated}
+          onAssignTile={actions.assignTile}
+          onDiscardHandTile={actions.discardHandTile}
+          discardsUsedEnemy={state.discardsUsedEnemy}
+          maxDiscards={TUNING.draft.maxDiscardsPerTurn}
+          playerMana={state.playerMana}
+          discardCost={TUNING.draft.discardManaCost}
         />
 
-        {/* Committed tile sequence + live damage/block preview */}
-        <CommittedSequence
-          committed={state.committed}
-          committedCardAnimationKeys={state.committedCardAnimationKeys}
-          slotCount={state.handSlotCount}
-          preview={state.preview}
-          selectedCommittedIndex={state.selectedCommittedIndex}
-          onSelectCommittedTile={actions.selectCommittedTile}
-          onMoveCommittedTile={actions.moveCommittedTile}
-        />
-
-        {/* Scrollable battle log */}
         <CombatLog log={state.log} logEndRef={state.logEndRef} />
 
         <CombatBanner banner={state.combatBanner} />
 
-        {/* Victory / defeat full-screen overlay */}
         <ResultOverlay
           phase={state.phase}
           enemy={state.enemy}
@@ -107,14 +108,6 @@ export default function DraftCombat() {
           onRestart={actions.restart}
           onNextEnemy={actions.nextEnemy}
         />
-
-        {/* Starting ability selection overlay */}
-        {state.phase === 'ability_select' && (
-          <AbilitySelectOverlay
-            options={state.startingAbilityOptions}
-            onSelect={actions.selectStartingAbility}
-          />
-        )}
       </div>
     </div>
   );

@@ -128,44 +128,40 @@ export const computeBucketResult = (tileElements, bucket) => {
       breakdown.push(`❄${survivingIce}I ×${mult} → ${dmg} dmg + ${survivingIce}❄`);
     }
   } else if (bucket === 'shield') {
-    // Cancelled pairs — raw base block, no combo, no contact status
+    // Cancelled pairs — wasted (no block, no cancel); penalises mixing ice+fire in shield
     if (cancelledPairs > 0) {
-      const cancelBlk = Math.round(
-        cancelledPairs * el.fire.shieldBase * 1.0 +
-        cancelledPairs * el.ice.shieldBase * 1.0,
-      );
-      block += cancelBlk;
-      breakdown.push(`✦${cancelledPairs}F+❄${cancelledPairs}I cancel → ${cancelBlk} blk`);
+      breakdown.push(`✦${cancelledPairs}F+❄${cancelledPairs}I cancel → wasted`);
     }
 
-    // Steel
+    // Steel — HP block with combo multiplier
     if (steelCount > 0) {
       const mult = comboMult(steelCount);
       const blk = Math.round(el.steel.shieldBase * steelCount * mult);
       block += blk;
-      breakdown.push(`◆${steelCount}S ×${mult} → ${blk} blk`);
+      breakdown.push(`◆${steelCount}S ×${mult} → ${blk} HP blk`);
     }
 
-    // Surviving Fire — block + burn-on-contact stacks
-    if (survivingFire > 0) {
-      const mult = comboMult(survivingFire);
-      const blk = Math.round(el.fire.shieldBase * survivingFire * mult);
-      block += blk;
-      burnStacks += survivingFire; // contact stacks applied to attacker if shield is hit
-      breakdown.push(`✦${survivingFire}F ×${mult} → ${blk} blk + ${survivingFire}🔥 contact`);
-    }
-
-    // Surviving Ice — block + freeze-on-contact stacks
+    // Surviving Ice — cancels incoming fire burn stacks 1:1 (no combo, no HP block)
     if (survivingIce > 0) {
-      const mult = comboMult(survivingIce);
-      const blk = Math.round(el.ice.shieldBase * survivingIce * mult);
-      block += blk;
-      freezeStacks += survivingIce;
-      breakdown.push(`❄${survivingIce}I ×${mult} → ${blk} blk + ${survivingIce}❄ contact`);
+      burnStacks += survivingIce; // reused field: burnStacks = iceBurnCancel for shield bucket
+      breakdown.push(`❄${survivingIce}I → ×${survivingIce} burn cancel`);
+    }
+
+    // Surviving Fire — cancels incoming ice freeze stacks 1:1 (no combo, no HP block)
+    if (survivingFire > 0) {
+      freezeStacks += survivingFire; // reused field: freezeStacks = fireFreezeCancel for shield bucket
+      breakdown.push(`✦${survivingFire}F → ×${survivingFire} freeze cancel`);
     }
   }
 
-  return { damage, block, burnStacks, freezeStacks, breakdown };
+  return {
+    damage,
+    block,
+    // For shield bucket: burnStacks = iceBurnCancel, freezeStacks = fireFreezeCancel
+    burnStacks,
+    freezeStacks,
+    breakdown,
+  };
 };
 
 /**
@@ -175,18 +171,23 @@ export const computeBucketResult = (tileElements, bucket) => {
  */
 export const computeAllBuckets = (allocation) => {
   const attackResult = computeBucketResult(allocation.attack ?? [], 'attack');
-  const shieldResult = computeBucketResult(allocation.shield ?? [], 'shield');
+  const shieldRaw = computeBucketResult(allocation.shield ?? [], 'shield');
 
   return {
     totalDamage: attackResult.damage,
-    totalBlock: shieldResult.block,
     attackBurnStacks: attackResult.burnStacks,
     attackFreezeStacks: attackResult.freezeStacks,
-    shieldBurnContact: shieldResult.burnStacks,
-    shieldFreezeContact: shieldResult.freezeStacks,
+    // Elemental shield breakdown (Phase 2)
+    shieldResult: {
+      steelBlock: shieldRaw.block,
+      iceBurnCancel: shieldRaw.burnStacks,   // ice in shield → cancel incoming burns
+      fireFreezeCancel: shieldRaw.freezeStacks, // fire in shield → cancel incoming freezes
+    },
+    // Legacy field kept for any remaining references
+    totalBlock: shieldRaw.block,
     bucketBreakdowns: {
       attack: attackResult.breakdown,
-      shield: shieldResult.breakdown,
+      shield: shieldRaw.breakdown,
     },
   };
 };
@@ -199,10 +200,36 @@ export const applyFreezeModifier = (baseSteelDmg, freezeStacks) =>
   Math.round(baseSteelDmg * (1 + freezeStacks * TUNING.status.freezeMultPerStack));
 
 /**
- * Human-readable telegraph for an enemy intent.
- * intent: { dmg, element }
+ * Apply an enemy's elemental shield to the player's attack result.
+ * enemyShield: { stacks, element }
+ * Returns a new attackResult with damage/stacks reduced.
  */
-export const buildTelegraphText = ({ dmg, element }) => {
-  const suffix = { fire: ' + BURN', ice: ' + FREEZE', steel: '' }[element] ?? '';
-  return `${dmg} ${element.toUpperCase()} DMG${suffix}`;
+export const applyEnemyShield = (attackResult, enemyShield) => {
+  if (!enemyShield || !enemyShield.stacks) return attackResult;
+  let { totalDamage, attackBurnStacks, attackFreezeStacks } = attackResult;
+  if (enemyShield.element === 'steel') {
+    const blocked = Math.min(totalDamage, enemyShield.stacks * TUNING.elements.steel.shieldBase);
+    totalDamage = Math.max(0, totalDamage - blocked);
+  } else if (enemyShield.element === 'ice') {
+    attackBurnStacks = Math.max(0, attackBurnStacks - enemyShield.stacks);
+  } else if (enemyShield.element === 'fire') {
+    attackFreezeStacks = Math.max(0, attackFreezeStacks - enemyShield.stacks);
+  }
+  return { ...attackResult, totalDamage, attackBurnStacks, attackFreezeStacks };
+};
+
+/**
+ * Human-readable telegraph for an enemy pattern step.
+ * pattern: { attack: { dmg, element, stacks }, shield: { stacks, element } }
+ */
+export const buildTelegraphText = ({ attack, shield }) => {
+  const stackSuffix = {
+    fire: attack.stacks > 0 ? ` + ${attack.stacks} BURN` : '',
+    ice:  attack.stacks > 0 ? ` + ${attack.stacks} FREEZE` : '',
+    steel: '',
+  }[attack.element] ?? '';
+  const atkText = `${attack.dmg} ${attack.element.toUpperCase()} DMG${stackSuffix}`;
+  if (!shield || !shield.stacks) return atkText;
+  const glyph = { steel: '◆', fire: '✦', ice: '❄' }[shield.element] ?? '?';
+  return `${atkText}  |  ${glyph}×${shield.stacks} SHIELD`;
 };

@@ -380,7 +380,7 @@ export const styles = {
   },
   row: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(6, 1fr)',
     gap: 12,
     marginBottom: 16,
   },
@@ -878,6 +878,150 @@ export const styles = {
   overlayBtnDisabled: {
     opacity: 0.4,
     filter: 'grayscale(0.35)',
+  },
+
+  // --- Freeze status badge ---
+  statusBadgeFreeze: {
+    background: 'rgba(20, 60, 160, 0.25)',
+    border: '1px solid rgba(60, 120, 220, 0.6)',
+    color: '#80b0e8',
+  },
+
+  // --- Elemental shield badges (Phase 2) ---
+  shieldBadgeSteel: {
+    background: 'rgba(50, 60, 70, 0.35)',
+    border: '1px solid rgba(138, 154, 170, 0.6)',
+    color: '#c8d4e0',
+  },
+  shieldBadgeIce: {
+    background: 'rgba(20, 60, 160, 0.2)',
+    border: '1px solid rgba(60, 130, 220, 0.55)',
+    color: '#a0c8f0',
+  },
+  shieldBadgeFire: {
+    background: 'rgba(140, 40, 20, 0.2)',
+    border: '1px solid rgba(192, 64, 48, 0.55)',
+    color: '#f0a080',
+  },
+
+  // --- Hand display (Phase 1 allocation UI) ---
+  handArea: {
+    background: 'linear-gradient(180deg, rgba(26, 22, 18, 0.6) 0%, rgba(13, 10, 8, 0.6) 100%)',
+    border: '1px solid #2a2418',
+    padding: 20,
+    marginBottom: 20,
+    borderRadius: 2,
+  },
+  handHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  handRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: 10,
+    marginBottom: 18,
+  },
+  handTileWrapper: {
+    position: 'relative',
+    minWidth: 0,
+  },
+  handTileCard: {
+    width: '100%',
+    aspectRatio: '3 / 4',
+    border: '2px solid',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    fontFamily: '"Cinzel", serif',
+    borderRadius: 2,
+    position: 'relative',
+    cursor: 'pointer',
+  },
+  handTileEmpty: {
+    background: '#0d0a08',
+    borderColor: '#1f1c16',
+    borderStyle: 'dashed',
+    color: '#3a342a',
+  },
+  handTileTag: {
+    fontSize: 9,
+    fontFamily: '"JetBrains Mono", monospace',
+    letterSpacing: '0.15em',
+    fontWeight: 700,
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+  },
+  handDiscardBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 2,
+    border: '1px solid rgba(232, 168, 144, 0.65)',
+    background: 'rgba(46, 26, 26, 0.9)',
+    color: '#e8a890',
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 13,
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+  },
+
+  // --- Allocation buckets ---
+  allocationRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 12,
+    marginBottom: 14,
+  },
+  allocationBucket: {
+    background: '#0f0c09',
+    border: '1px solid #2a2418',
+    borderRadius: 2,
+    padding: '10px 12px',
+    minHeight: 80,
+  },
+  allocationBucketHeader: {
+    fontFamily: '"Cinzel", serif',
+    fontSize: 11,
+    letterSpacing: '0.22em',
+    fontWeight: 600,
+    marginBottom: 8,
+  },
+  allocationBucketBody: {
+    fontSize: 10,
+    lineHeight: 1.6,
+    color: '#8a8070',
+    letterSpacing: '0.06em',
+  },
+  allocBucketEmpty: {
+    color: '#3a342a',
+    fontStyle: 'italic',
+  },
+  allocPreviewLine: {
+    color: '#b8a88a',
+    marginBottom: 2,
+  },
+  allocPreviewTotal: {
+    fontWeight: 700,
+    marginTop: 4,
+    fontSize: 11,
+  },
+  allocationStatus: {
+    fontSize: 11,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    padding: '8px 0 2px',
   },
 
   // --- Spells panel ---

@@ -6,6 +6,7 @@ import {
   buildBoardRow,
   computeAllBuckets,
   applyFreezeModifier,
+  applyEnemyShield,
   buildTelegraphText,
 } from './gameHelpers';
 import { playSound } from './soundEffects';
@@ -24,7 +25,7 @@ export default function useCombat() {
   const [enemyIdx, setEnemyIdx] = useState(0);
   const [playerHp, setPlayerHp] = useState(TUNING.player.maxHp);
   const [playerMana, setPlayerMana] = useState(TUNING.player.startingMana);
-  const [playerShield, setPlayerShield] = useState(0);
+  const [playerShieldBreakdown, setPlayerShieldBreakdown] = useState({ steel: 0, ice: 0, fire: 0 });
   const [enemyHp, setEnemyHp] = useState(TUNING.enemies[0].hp);
 
   // --- Status effects ---
@@ -158,16 +159,15 @@ export default function useCombat() {
   // Turn lifecycle
   // ----------------------------------------------------------
 
-  const startTurn = (turnNum) => {
+  // nextPatternIdx passed explicitly to avoid stale closure from setState above
+  const startTurn = (turnNum, nextPatternIdx = enemyPatternIndex) => {
     setHand([]);
     setAllocationSlots(Array(TUNING.hand.handSize).fill(null));
     setDiscardsUsedEnemy(0);
 
-    const intent = TUNING.enemies[enemyIdx].pattern[
-      enemyPatternIndex % TUNING.enemies[enemyIdx].pattern.length
-    ];
-    const incoming = intent.dmg;
-    setIncomingDamage(incoming);
+    const pattern = TUNING.enemies[enemyIdx].pattern;
+    const intent = pattern[nextPatternIdx % pattern.length];
+    setIncomingDamage(intent.attack.dmg);
 
     // Mana regen each turn
     setPlayerMana((m) => Math.min(TUNING.player.maxMana, m + TUNING.player.manaRegenPerTurn));
@@ -205,7 +205,7 @@ export default function useCombat() {
 
     // Start first turn (mana regen skipped on battle start — player already at full)
     const intent = TUNING.enemies[enemyIdx].pattern[0];
-    setIncomingDamage(intent.dmg);
+    setIncomingDamage(intent.attack.dmg);
     setTurn(1);
     setPhase('drafting');
     showCombatBanner(
@@ -369,77 +369,100 @@ export default function useCombat() {
     playSound('submit');
 
     const result = computeAllBuckets(allocation);
-    const {
-      totalDamage,
-      totalBlock,
-      attackBurnStacks,
-      attackFreezeStacks,
-      shieldBurnContact,
-      shieldFreezeContact,
-    } = result;
+    const { totalDamage, attackBurnStacks, attackFreezeStacks, shieldResult } = result;
+
+    // Set player shield for this turn (consumed after enemy attack)
+    setPlayerShieldBreakdown(shieldResult);
 
     setTimeout(() => {
-      // --- Apply shield ---
-      const shieldCap = TUNING.player.maxShield;
-      const shieldAfterGain = Math.min(shieldCap, playerShield + totalBlock);
-      if (totalBlock > 0) {
-        setPlayerShield(shieldAfterGain);
-        addLog(`T${turn}: Shield +${totalBlock} (${shieldAfterGain}/${shieldCap})`);
+      // --- Log shield allocation ---
+      if (shieldResult.steelBlock > 0) {
+        addLog(`T${turn}: Steel shield ${shieldResult.steelBlock} HP block`);
+      }
+      if (shieldResult.iceBurnCancel > 0) {
+        addLog(`T${turn}: Ice shield — will cancel ${shieldResult.iceBurnCancel} burn stack(s)`);
+      }
+      if (shieldResult.fireFreezeCancel > 0) {
+        addLog(`T${turn}: Fire shield — will cancel ${shieldResult.fireFreezeCancel} freeze stack(s)`);
       }
 
-      // --- Apply attack to enemy ---
-      // Freeze modifier applies to Steel damage only.
-      // For simplicity in Phase 1, we apply freeze to the total attack
-      // proportional to Steel tiles (applyFreezeModifier handles the math).
-      // The totalDamage already has Steel separated via computeBucketResult,
-      // but for Phase 1 we approximate: if enemy has freeze stacks, boost
-      // the steel component. We recompute the steel-only portion here.
+      // --- Apply freeze modifier to steel portion of attack ---
       const steelTiles = allocation.attack.filter((t) => t === 'S').length;
-      const nonSteelDmg = totalDamage - Math.round(
-        TUNING.elements.steel.atkBase *
-        steelTiles *
-        (TUNING.combos[Math.min(steelTiles, 5)] ?? 1.0),
-      );
-      const baseSteelDmg = totalDamage - nonSteelDmg;
+      const baseSteelDmg = steelTiles > 0
+        ? Math.round(TUNING.elements.steel.atkBase * steelTiles * (TUNING.combos[Math.min(steelTiles, 5)] ?? 1.0))
+        : 0;
+      const nonSteelDmg = totalDamage - baseSteelDmg;
       const boostedSteelDmg = applyFreezeModifier(baseSteelDmg, enemyFreezeStacks);
-      const finalDmg = Math.max(0, boostedSteelDmg + nonSteelDmg);
+      let finalDmg = Math.max(0, boostedSteelDmg + nonSteelDmg);
+      let finalBurnStacks = attackBurnStacks;
+      let finalFreezeStacks = attackFreezeStacks;
 
-      // Apply damage to enemy HP (no enemy shield in Phase 1)
+      // --- Apply enemy's elemental shield to player's attack ---
+      const enemyShieldObj = currentIntentRaw.shield;
+      if (enemyShieldObj && enemyShieldObj.stacks > 0) {
+        if (enemyShieldObj.element === 'steel') {
+          const blocked = Math.min(finalDmg, enemyShieldObj.stacks * TUNING.elements.steel.shieldBase);
+          finalDmg = Math.max(0, finalDmg - blocked);
+          if (blocked > 0) addLog(`  Enemy steel shield blocks ${blocked} damage`);
+        } else if (enemyShieldObj.element === 'ice') {
+          const cancelled = Math.min(finalBurnStacks, enemyShieldObj.stacks);
+          finalBurnStacks = Math.max(0, finalBurnStacks - cancelled);
+          if (cancelled > 0) addLog(`  Enemy ice shield cancels ${cancelled} burn stack(s)`);
+        } else if (enemyShieldObj.element === 'fire') {
+          const cancelled = Math.min(finalFreezeStacks, enemyShieldObj.stacks);
+          finalFreezeStacks = Math.max(0, finalFreezeStacks - cancelled);
+          if (cancelled > 0) addLog(`  Enemy fire shield cancels ${cancelled} freeze stack(s)`);
+        }
+      }
+
+      // --- Cross-status cancellation: player burns vs enemy freeze, ice vs enemy burn ---
+      let curEnemyFreezeStacks = enemyFreezeStacks;
+      let curEnemyBurnStacks = enemyBurnStacks;
+      let curEnemyBurnDuration = enemyBurnDuration;
+
+      if (finalBurnStacks > 0 && curEnemyFreezeStacks > 0) {
+        const cancelled = Math.min(finalBurnStacks, curEnemyFreezeStacks);
+        finalBurnStacks -= cancelled;
+        curEnemyFreezeStacks = Math.max(0, curEnemyFreezeStacks - cancelled);
+        setEnemyFreezeStacks(curEnemyFreezeStacks);
+        addLog(`  Fire melts ${cancelled} enemy freeze stack(s) → ${curEnemyFreezeStacks} remain`);
+      }
+
+      if (finalFreezeStacks > 0 && curEnemyBurnStacks > 0) {
+        const cancelled = Math.min(finalFreezeStacks, curEnemyBurnStacks);
+        finalFreezeStacks -= cancelled;
+        curEnemyBurnStacks = Math.max(0, curEnemyBurnStacks - cancelled);
+        if (curEnemyBurnStacks === 0) curEnemyBurnDuration = 0;
+        setEnemyBurnStacks(curEnemyBurnStacks);
+        setEnemyBurnDuration(curEnemyBurnDuration);
+        addLog(`  Ice cools ${cancelled} enemy burn stack(s) → ${curEnemyBurnStacks} remain`);
+      }
+
+      // --- Apply damage and status to enemy ---
       const newEnemyHp = Math.max(0, enemyHp - finalDmg);
       setEnemyHp(newEnemyHp);
 
-      // Apply burn stacks to enemy
-      if (attackBurnStacks > 0) {
-        setEnemyBurnStacks((s) =>
-          Math.min(TUNING.status.burnMaxStacks, s + attackBurnStacks),
-        );
+      if (finalBurnStacks > 0) {
+        setEnemyBurnStacks((s) => Math.min(TUNING.status.burnMaxStacks, s + finalBurnStacks));
         setEnemyBurnDuration(TUNING.status.burnDuration);
-        addLog(
-          `  Applied ${attackBurnStacks} burn stack(s) to ${enemy.name} (${TUNING.status.burnDuration} turns)`,
-        );
+        addLog(`  Applied ${finalBurnStacks} burn stack(s) to ${enemy.name} (${TUNING.status.burnDuration} turns)`);
       }
-
-      // Apply freeze stacks to enemy
-      if (attackFreezeStacks > 0) {
-        setEnemyFreezeStacks((s) =>
-          Math.min(TUNING.status.freezeMaxStacks, s + attackFreezeStacks),
-        );
-        addLog(`  Applied ${attackFreezeStacks} freeze stack(s) to ${enemy.name}`);
+      if (finalFreezeStacks > 0) {
+        setEnemyFreezeStacks((s) => Math.min(TUNING.status.freezeMaxStacks, s + finalFreezeStacks));
+        addLog(`  Applied ${finalFreezeStacks} freeze stack(s) to ${enemy.name}`);
       }
 
       if (finalDmg > 0) {
         addLog(`T${turn}: Attack → ${finalDmg} dmg to ${enemy.name}`);
         if (enemyFreezeStacks > 0 && steelTiles > 0) {
-          addLog(
-            `  Freeze ×${enemyFreezeStacks}: steel dmg ${baseSteelDmg} → ${boostedSteelDmg}`,
-          );
+          addLog(`  Freeze ×${enemyFreezeStacks}: steel dmg ${baseSteelDmg} → ${boostedSteelDmg}`);
         }
         playSound('attack');
       }
 
       showCombatBanner({
         eyebrow: 'Player Action',
-        title: `${finalDmg > 0 ? finalDmg + ' dmg' : ''}${totalBlock > 0 ? ' / +' + totalBlock + ' shield' : ''}`,
+        title: `${finalDmg > 0 ? finalDmg + ' dmg' : ''}${shieldResult.steelBlock > 0 ? ' / ' + shieldResult.steelBlock + ' SHL' : ''}`,
         detail: result.bucketBreakdowns.attack.join('  ') || 'No attack',
         tone: 'player',
       });
@@ -449,86 +472,104 @@ export default function useCombat() {
         return;
       }
 
-      // --- Enemy turn ---
+      // --- Enemy turn: AI counter-element check ---
       const intent = currentIntentRaw;
+      let effectiveAttack = { ...intent.attack };
+      if (effectiveAttack.element === 'ice' && playerBurnStacks > 0) {
+        effectiveAttack = { dmg: effectiveAttack.dmg, element: 'steel', stacks: 0 };
+        addLog(`  ${enemy.name} senses your burns — strikes with raw steel!`);
+      } else if (effectiveAttack.element === 'fire' && playerFreezeStacks > 0) {
+        effectiveAttack = { dmg: effectiveAttack.dmg, element: 'steel', stacks: 0 };
+        addLog(`  ${enemy.name} senses your frost — strikes with raw steel!`);
+      }
 
       setTimeout(() => {
-        showCombatBanner(
-          {
-            eyebrow: 'Enemy Turn',
-            title: `${enemy.name} prepares`,
-            detail: buildTelegraphText(intent),
-            tone: 'enemy',
-          },
-        );
+        showCombatBanner({
+          eyebrow: 'Enemy Turn',
+          title: `${enemy.name} prepares`,
+          detail: buildTelegraphText(intent),
+          tone: 'enemy',
+        });
         playSound('enemyTurn');
       }, 1000);
 
       setTimeout(() => {
-        const rawEnemyDmg = intent.dmg;
-        const absorbed = Math.min(shieldAfterGain, rawEnemyDmg);
-        const taken = rawEnemyDmg - absorbed;
-        const newPlayerShield = shieldAfterGain - absorbed;
-        const newPlayerHp = Math.max(0, playerHp - taken);
+        const rawEnemyDmg = effectiveAttack.dmg;
+        const rawEnemyStacks = effectiveAttack.stacks;
+        const rawEnemyElement = effectiveAttack.element;
 
-        setPlayerShield(newPlayerShield);
-        setPlayerHp(newPlayerHp);
+        // Apply player elemental shield
+        let finalEnemyDmg = rawEnemyDmg;
+        let incomingStacks = rawEnemyStacks;
 
-        if (absorbed > 0) {
-          addLog(
-            `  ${enemy.name} hits ${rawEnemyDmg} — shield absorbs ${absorbed}, you take ${taken}`,
-          );
-        } else {
-          addLog(`  ${enemy.name} hits ${rawEnemyDmg} — you take ${taken}`);
+        if (rawEnemyElement === 'steel') {
+          const absorbed = Math.min(shieldResult.steelBlock, finalEnemyDmg);
+          finalEnemyDmg = Math.max(0, finalEnemyDmg - absorbed);
+          if (absorbed > 0) addLog(`  Steel shield absorbs ${absorbed} damage`);
+        } else if (rawEnemyElement === 'fire') {
+          const burnsCancelled = Math.min(shieldResult.iceBurnCancel, incomingStacks);
+          incomingStacks = Math.max(0, incomingStacks - burnsCancelled);
+          if (burnsCancelled > 0) addLog(`  Ice shield cancels ${burnsCancelled} incoming burn(s)!`);
+          const absorbed = Math.min(shieldResult.steelBlock, finalEnemyDmg);
+          finalEnemyDmg = Math.max(0, finalEnemyDmg - absorbed);
+          if (absorbed > 0) addLog(`  Steel shield absorbs ${absorbed} fire damage`);
+        } else if (rawEnemyElement === 'ice') {
+          const freezesCancelled = Math.min(shieldResult.fireFreezeCancel, incomingStacks);
+          incomingStacks = Math.max(0, incomingStacks - freezesCancelled);
+          if (freezesCancelled > 0) addLog(`  Fire shield cancels ${freezesCancelled} incoming freeze(s)!`);
+          const absorbed = Math.min(shieldResult.steelBlock, finalEnemyDmg);
+          finalEnemyDmg = Math.max(0, finalEnemyDmg - absorbed);
+          if (absorbed > 0) addLog(`  Steel shield absorbs ${absorbed} ice damage`);
         }
 
-        // Apply enemy status to player based on element
-        if (intent.element === 'fire') {
-          const newStacks = Math.min(
-            TUNING.status.burnMaxStacks,
-            playerBurnStacks + 1,
-          );
-          setPlayerBurnStacks(newStacks);
+        // Cross-status cancellation on player
+        let incomingBurns = rawEnemyElement === 'fire' ? incomingStacks : 0;
+        let incomingFreezes = rawEnemyElement === 'ice' ? incomingStacks : 0;
+        let newPlayerBurnStacks = playerBurnStacks;
+        let newPlayerFreezeStacks = playerFreezeStacks;
+
+        if (incomingFreezes > 0 && newPlayerBurnStacks > 0) {
+          const cancelled = Math.min(incomingFreezes, newPlayerBurnStacks);
+          incomingFreezes -= cancelled;
+          newPlayerBurnStacks -= cancelled;
+          addLog(`  Cold neutralizes ${cancelled} of your burn stack(s)!`);
+        }
+        if (incomingBurns > 0 && newPlayerFreezeStacks > 0) {
+          const cancelled = Math.min(incomingBurns, newPlayerFreezeStacks);
+          incomingBurns -= cancelled;
+          newPlayerFreezeStacks -= cancelled;
+          addLog(`  Fire melts ${cancelled} of your freeze stack(s)!`);
+        }
+
+        // Apply remaining incoming status
+        if (incomingBurns > 0) {
+          newPlayerBurnStacks = Math.min(TUNING.status.burnMaxStacks, newPlayerBurnStacks + incomingBurns);
           setPlayerBurnDuration(TUNING.status.burnDuration);
-          addLog(`  ${enemy.name} applies 1 burn stack to you (${TUNING.status.burnDuration} turns)`);
-        } else if (intent.element === 'ice') {
-          const newStacks = Math.min(
-            TUNING.status.freezeMaxStacks,
-            playerFreezeStacks + 1,
-          );
-          setPlayerFreezeStacks(newStacks);
-          addLog(`  ${enemy.name} applies 1 freeze stack to you`);
+          addLog(`  ${enemy.name} applies ${incomingBurns} burn stack(s) to you`);
+        }
+        if (incomingFreezes > 0) {
+          newPlayerFreezeStacks = Math.min(TUNING.status.freezeMaxStacks, newPlayerFreezeStacks + incomingFreezes);
+          addLog(`  ${enemy.name} applies ${incomingFreezes} freeze stack(s) to you`);
+        }
+        if (newPlayerBurnStacks === 0) setPlayerBurnDuration(0);
+        setPlayerBurnStacks(newPlayerBurnStacks);
+        setPlayerFreezeStacks(newPlayerFreezeStacks);
+
+        const newPlayerHp = Math.max(0, playerHp - finalEnemyDmg);
+        setPlayerHp(newPlayerHp);
+        if (finalEnemyDmg > 0) {
+          addLog(`  ${enemy.name} hits — you take ${finalEnemyDmg}`);
         }
 
-        // Contact effects from player shield (fire/ice tiles in shield bucket)
-        if (taken < rawEnemyDmg || absorbed > 0) {
-          // Shield was hit
-          if (shieldBurnContact > 0) {
-            setEnemyBurnStacks((s) =>
-              Math.min(TUNING.status.burnMaxStacks, s + shieldBurnContact),
-            );
-            setEnemyBurnDuration(TUNING.status.burnDuration);
-            addLog(
-              `  Fire shield contact: ${shieldBurnContact} burn stack(s) to ${enemy.name}`,
-            );
-          }
-          if (shieldFreezeContact > 0) {
-            setEnemyFreezeStacks((s) =>
-              Math.min(TUNING.status.freezeMaxStacks, s + shieldFreezeContact),
-            );
-            addLog(
-              `  Ice shield contact: ${shieldFreezeContact} freeze stack(s) to ${enemy.name}`,
-            );
-          }
-        }
+        // Consume shield (one-turn-only)
+        setPlayerShieldBreakdown({ steel: 0, ice: 0, fire: 0 });
 
         showCombatBanner({
           eyebrow: enemy.name,
           title: `Attack ${rawEnemyDmg} damage`,
-          detail:
-            absorbed > 0
-              ? `Shield absorbed ${absorbed}, you took ${taken}`
-              : `You took ${taken} damage`,
+          detail: finalEnemyDmg < rawEnemyDmg
+            ? `Shield reduced to ${finalEnemyDmg}, you took ${finalEnemyDmg}`
+            : `You took ${finalEnemyDmg} damage`,
           tone: 'enemy',
         });
         playSound('enemyAttack');
@@ -553,9 +594,7 @@ export default function useCombat() {
             const newDuration = enemyBurnDuration - 1;
             setEnemyBurnDuration(newDuration);
             if (newDuration <= 0) setEnemyBurnStacks(0);
-            addLog(
-              `  🔥 ${enemy.name} burns: ${burnDmg} dmg (${newDuration} turns left)`,
-            );
+            addLog(`  🔥 ${enemy.name} burns: ${burnDmg} dmg (${newDuration} turns left)`);
             loggedTick = true;
           }
 
@@ -566,8 +605,8 @@ export default function useCombat() {
           }
 
           // Player burn tick
-          if (playerBurnStacks > 0 && playerBurnDuration > 0) {
-            const burnDmg = playerBurnStacks * TUNING.status.burnPerStack;
+          if (newPlayerBurnStacks > 0 && playerBurnDuration > 0) {
+            const burnDmg = newPlayerBurnStacks * TUNING.status.burnPerStack;
             const burnedHp = Math.max(0, newPlayerHp - burnDmg);
             setPlayerHp(burnedHp);
             const newDuration = playerBurnDuration - 1;
@@ -583,7 +622,7 @@ export default function useCombat() {
           }
 
           // Player freeze decay
-          if (playerFreezeStacks > 0) {
+          if (newPlayerFreezeStacks > 0) {
             setPlayerFreezeStacks((s) => Math.max(0, s - 1));
           }
 
@@ -592,12 +631,12 @@ export default function useCombat() {
             return;
           }
 
-          // Advance pattern index and start next turn
+          // Advance pattern and start next turn
           const nextPatternIdx = enemyPatternIndex + 1;
           setEnemyPatternIndex(nextPatternIdx);
           const nextTurn = turn + 1;
           setTurn(nextTurn);
-          startTurn(nextTurn);
+          startTurn(nextTurn, nextPatternIdx);
         }, 1500);
       }, 2000);
     }, 600);
@@ -640,7 +679,7 @@ export default function useCombat() {
     setEnemyIdx(0);
     setPlayerHp(TUNING.player.maxHp);
     setPlayerMana(TUNING.player.startingMana);
-    setPlayerShield(0);
+    setPlayerShieldBreakdown({ steel: 0, ice: 0, fire: 0 });
     setLog([]);
     setVictoryReward(null);
     setSelectedRewardKeys([]);
@@ -657,7 +696,7 @@ export default function useCombat() {
       enemy,
       playerHp,
       playerMana,
-      playerShield,
+      playerShieldBreakdown,
       enemyHp,
       enemyBurnStacks,
       enemyBurnDuration,
@@ -684,6 +723,7 @@ export default function useCombat() {
       selectedRewardKeys,
       logEndRef,
       deckShuffleCount,
+      deck,
       currentIntent: currentIntentRaw,
       nextIntent: nextIntentRaw,
     },

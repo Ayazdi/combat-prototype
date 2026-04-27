@@ -142,11 +142,12 @@ export default function HandAndAllocation({
             ) : (
               <div style={styles.allocBucketEmpty}>no tiles</div>
             )}
-            {allocPreview && (
+            {allocPreview?.shieldResult && (
               <div style={{ ...styles.allocPreviewTotal, color: '#a0c0e8' }}>
-                → {allocPreview.totalBlock} block
-                {allocPreview.shieldBurnContact > 0 && ` + ${allocPreview.shieldBurnContact}🔥 on-hit`}
-                {allocPreview.shieldFreezeContact > 0 && ` + ${allocPreview.shieldFreezeContact}❄ on-hit`}
+                {allocPreview.shieldResult.steelBlock > 0 && `◆ ${allocPreview.shieldResult.steelBlock} BLK`}
+                {allocPreview.shieldResult.iceBurnCancel > 0 && `  ❄ ×${allocPreview.shieldResult.iceBurnCancel} burn cancel`}
+                {allocPreview.shieldResult.fireFreezeCancel > 0 && `  ✦ ×${allocPreview.shieldResult.fireFreezeCancel} freeze cancel`}
+                {allocPreview.shieldResult.steelBlock === 0 && allocPreview.shieldResult.iceBurnCancel === 0 && allocPreview.shieldResult.fireFreezeCancel === 0 && '→ no shield'}
               </div>
             )}
           </div>

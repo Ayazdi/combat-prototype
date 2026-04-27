@@ -18,6 +18,8 @@ export const TUNING = {
     rerollCost: 20,
     discardCost: 30,
   },
+  rewardChoicesPerKill: 1,
+
   // Kept for DraftArea compatibility
   draft: {
     rowSize: 6,
@@ -52,46 +54,52 @@ export const TUNING = {
     {
       id: 1,
       name: 'Slime',
-      hp: 120,
-      pattern: [{ dmg: 18, element: 'steel' }],
+      hp: 100,
+      pattern: [
+        { attack: { dmg: 14, element: 'steel', stacks: 0 }, shield: { stacks: 1, element: 'steel' } },
+      ],
     },
     {
       id: 2,
       name: 'Ember Imp',
-      hp: 180,
-      pattern: [{ dmg: 14, element: 'fire' }],
+      hp: 150,
+      pattern: [
+        { attack: { dmg: 10, element: 'fire', stacks: 2 }, shield: { stacks: 3, element: 'ice' } },
+      ],
     },
     {
       id: 3,
       name: 'Frost Wolf',
-      hp: 220,
-      pattern: [{ dmg: 18, element: 'ice' }],
+      hp: 200,
+      pattern: [
+        { attack: { dmg: 12, element: 'ice', stacks: 2 }, shield: { stacks: 3, element: 'fire' } },
+      ],
     },
     {
       id: 4,
       name: 'Iron Golem',
-      hp: 320,
+      hp: 300,
       pattern: [
-        { dmg: 30, element: 'steel' },
-        { dmg: 30, element: 'steel' },
+        { attack: { dmg: 24, element: 'steel', stacks: 0 }, shield: { stacks: 4, element: 'steel' } },
+        { attack: { dmg: 30, element: 'steel', stacks: 0 }, shield: { stacks: 4, element: 'steel' } },
       ],
     },
     {
       id: 5,
       name: 'Pyromancer',
-      hp: 280,
+      hp: 260,
       pattern: [
-        { dmg: 22, element: 'fire' },
-        { dmg: 18, element: 'fire' },
+        { attack: { dmg: 14, element: 'fire', stacks: 3 }, shield: { stacks: 4, element: 'ice' } },
+        { attack: { dmg:  8, element: 'fire', stacks: 5 }, shield: { stacks: 2, element: 'ice' } },
       ],
     },
     {
       id: 6,
       name: 'Stormcaller',
-      hp: 380,
+      hp: 360,
       pattern: [
-        { dmg: 24, element: 'steel' },
-        { dmg: 18, element: 'ice' },
+        { attack: { dmg: 20, element: 'steel', stacks: 0 }, shield: { stacks: 3, element: 'steel' } },
+        { attack: { dmg: 14, element: 'ice',   stacks: 3 }, shield: { stacks: 3, element: 'fire' } },
       ],
     },
   ],

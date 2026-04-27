@@ -1,55 +1,84 @@
 import { TUNING } from '../constants';
-import { abilityDescription } from '../gameHelpers';
+import { buildTelegraphText } from '../gameHelpers';
 import { styles } from '../styles';
 
 // ============================================================
-// Combatants — renders the player panel (HP / MP / Shield),
-// the "versus" divider, and the enemy panel (HP + telegraph).
+// Combatants — player panel + enemy panel with element statuses
 // ============================================================
 export default function Combatants({
+  phase,
   playerHp,
   playerMana,
-  playerShield,
+  playerShieldBreakdown,
+  shieldPreview,
+  playerBurnStacks,
+  playerBurnDuration,
+  playerFreezeStacks,
   enemy,
   enemyHp,
-  enemyShield,
-  enemyTelegraph,
-  enemyIntentQueue,
-  statusEffects,
+  enemyBurnStacks,
+  enemyBurnDuration,
+  enemyFreezeStacks,
+  currentIntent,
+  nextIntent,
 }) {
+  // During drafting show the preview; during resolving show the actual breakdown
+  const activeShield = (phase === 'drafting' ? shieldPreview : playerShieldBreakdown) ?? { steel: 0, ice: 0, fire: 0 };
+  const hasShield = activeShield.steel > 0 || activeShield.ice > 0 || activeShield.fire > 0;
+
   return (
     <section style={styles.combatants}>
       {/* ---- Player stats ---- */}
       <div style={styles.combatant}>
-        <div style={styles.combatantLabel}>YOU · Lv1</div>
-        <div style={styles.statsLine}>ATK {TUNING.tiles.attackBase} · DEF {TUNING.tiles.defenceBase}</div>
+        <div style={styles.combatantLabel}>YOU</div>
 
-        {/* HP bar */}
         <StatBar
           label="HP"
           current={playerHp}
           max={TUNING.player.maxHp}
           gradient="linear-gradient(90deg, #c8412e 0%, #e56947 100%)"
         />
-        {/* MP bar */}
         <StatBar
           label="MP"
           current={playerMana}
           max={TUNING.player.maxMana}
           gradient="linear-gradient(90deg, #2c5d8f 0%, #4a8bc2 100%)"
         />
-        {/* Shield bar */}
-        <StatBar
-          label="SH"
-          current={playerShield}
-          max={TUNING.player.maxShield}
-          gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
-        />
 
-        {/* Player status badges (Endure) */}
-        {statusEffects?.endure && (
+        {/* Elemental shield badges (replaces shield bar) */}
+        {hasShield && (
           <div style={styles.statusBadges}>
-            <span style={{ ...styles.statusBadge, ...styles.statusBadgeEndure }}>🛡 ENDURE</span>
+            {activeShield.steel > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.shieldBadgeSteel }}>
+                ◆ {activeShield.steel} BLK{phase === 'drafting' ? ' ◌' : ''}
+              </span>
+            )}
+            {activeShield.ice > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.shieldBadgeIce }}>
+                ❄ ×{activeShield.ice} ICE{phase === 'drafting' ? ' ◌' : ''}
+              </span>
+            )}
+            {activeShield.fire > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.shieldBadgeFire }}>
+                ✦ ×{activeShield.fire} FIRE{phase === 'drafting' ? ' ◌' : ''}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Player status badges */}
+        {(playerBurnStacks > 0 || playerFreezeStacks > 0) && (
+          <div style={styles.statusBadges}>
+            {playerBurnStacks > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeBurn }}>
+                🔥 {playerBurnStacks} burn · {playerBurnDuration}t
+              </span>
+            )}
+            {playerFreezeStacks > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeFreeze }}>
+                ❄ {playerFreezeStacks} freeze
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -63,26 +92,10 @@ export default function Combatants({
 
       {/* ---- Enemy stats ---- */}
       <div style={styles.combatant}>
-        <div style={{ ...styles.combatantLabel, textAlign: 'right', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <div style={{ ...styles.combatantLabel, textAlign: 'right' }}>
           {enemy.name.toUpperCase()} · Lv{enemy.id}
-          {enemy.ability && (
-            <span className="ability-wrap" style={styles.abilityWrap}>
-              <span
-                className="ability-badge"
-                style={styles.abilityBadge}
-                title={abilityDescription(enemy.ability)}
-              >
-                ⓘ
-              </span>
-              <span className="ability-tooltip" style={styles.abilityTooltip}>
-                {abilityDescription(enemy.ability)}
-              </span>
-            </span>
-          )}
         </div>
-        <div style={{ ...styles.statsLine, textAlign: 'right' }}>ATK {enemy.attack} · DEF {enemy.defend}</div>
 
-        {/* Enemy HP bar */}
         <StatBar
           label="HP"
           current={enemyHp}
@@ -90,70 +103,49 @@ export default function Combatants({
           gradient="linear-gradient(90deg, #7a2a2a 0%, #a64444 100%)"
         />
 
-        {/* Enemy shield bar */}
-        <StatBar
-          label="SH"
-          current={enemyShield}
-          max={Math.max(enemy.hp, 1)}
-          gradient="linear-gradient(90deg, #4a6a3a 0%, #7aa85a 100%)"
-        />
-
-        {/* Enemy status badges (Burn, Vulnerable) */}
-        {(statusEffects?.burn || statusEffects?.vulnerable) && (
+        {/* Enemy status badges */}
+        {(enemyBurnStacks > 0 || enemyFreezeStacks > 0) && (
           <div style={{ ...styles.statusBadges, justifyContent: 'flex-end' }}>
-            {statusEffects.burn && statusEffects.burn.turnsLeft > 0 && (
+            {enemyBurnStacks > 0 && (
               <span style={{ ...styles.statusBadge, ...styles.statusBadgeBurn }}>
-                🔥 {statusEffects.burn.turnsLeft} · {statusEffects.burn.tickDamage} dmg
+                🔥 {enemyBurnStacks} burn · {enemyBurnDuration}t
               </span>
             )}
-            {statusEffects.vulnerable && statusEffects.vulnerable.turnsLeft > 0 && (
-              <span style={{ ...styles.statusBadge, ...styles.statusBadgeVulnerable }}>
-                🎯 VULN {statusEffects.vulnerable.turnsLeft}
+            {enemyFreezeStacks > 0 && (
+              <span style={{ ...styles.statusBadge, ...styles.statusBadgeFreeze }}>
+                ❄ {enemyFreezeStacks} freeze
               </span>
             )}
           </div>
         )}
 
-        {/* Enemy telegraph — shows optional status + current and next intents */}
-        <div style={styles.telegraph}>
-          {enemyTelegraph ? (
-            <div>
-              <span style={styles.telegraphIcon}>⚔</span> {enemyTelegraph}
-            </div>
-          ) : null}
-          {enemyIntentQueue?.length > 0 && (
+        {/* Enemy telegraph */}
+        {currentIntent && (
+          <div style={styles.telegraph}>
             <div style={styles.telegraphQueue}>
-              {enemyIntentQueue.slice(0, 2).map((intent, i) => (
-                <span key={i} style={styles.telegraphChip}>
-                  {i === 0 ? 'NOW' : 'NEXT'}: {intent.text}
+              <span style={{ ...styles.telegraphChip, borderColor: '#c04040', color: '#e8c0c0' }}>
+                NOW: {buildTelegraphText(currentIntent)}
+              </span>
+              {nextIntent && (
+                <span style={styles.telegraphChip}>
+                  NEXT: {buildTelegraphText(nextIntent)}
                 </span>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-// ============================================================
-// StatBar — reusable HP / MP / Shield bar used by both
-// the player and enemy panels.
-// ============================================================
 function StatBar({ label, current, max, gradient }) {
   const widthPct = Math.max(0, Math.min(100, (current / max) * 100));
-
   return (
     <div style={styles.statBar}>
       <div style={styles.statLabel}>{label}</div>
       <div style={styles.barTrack}>
-        <div
-          style={{
-            ...styles.barFill,
-            width: `${widthPct}%`,
-            background: gradient,
-          }}
-        />
+        <div style={{ ...styles.barFill, width: `${widthPct}%`, background: gradient }} />
         <span style={styles.barText}>
           {current} / {max}
         </span>

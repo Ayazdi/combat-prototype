@@ -17,7 +17,7 @@ export default function DraftArea({
   rerollsLeftEnemy,
   discardsLeftEnemy,
   playerMana,
-  deckSize,
+  deckCounts,
   deckShuffleCount,
   handLength,
   handFull,
@@ -91,14 +91,17 @@ export default function DraftArea({
         ))}
       </div>
 
-      {/* Deck info */}
+      {/* Deck info — element counts + shuffle counter */}
       <div style={styles.deckInfo}>
-        <span style={styles.deckChip}>DECK: {deckSize}</span>
+        <span style={{ ...styles.deckChip, color: '#c8d4e0' }}>◆ {deckCounts?.S ?? 0}</span>
+        <span style={{ ...styles.deckChip, color: '#e8a0a0' }}>✦ {deckCounts?.F ?? 0}</span>
+        <span style={{ ...styles.deckChip, color: '#a0c0e8' }}>❄ {deckCounts?.I ?? 0}</span>
+        <span style={{ ...styles.deckChip, color: '#555' }}>· {deckCounts?.E ?? 0}</span>
         <span style={styles.deckChip}>SHUFFLES: {deckShuffleCount}</span>
       </div>
 
       {/* Controls */}
-      <div style={styles.controls3}>
+      <div style={styles.controls}>
         <button
           onClick={onReroll}
           disabled={rerollDisabled}
